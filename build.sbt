@@ -6,7 +6,7 @@ ThisBuild / organization     := "com.github.yfzcsc"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "fpga-final-project",
+    name := "fpga_final_project",
     libraryDependencies ++= Seq(
       "edu.berkeley.cs" %% "chisel3" % "3.4.3",
       "edu.berkeley.cs" %% "chiseltest" % "0.3.3" % "test"
