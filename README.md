@@ -5,3 +5,5 @@ The final project of Introduction to Artificial Intelligence Chip：From Verilog
 An NPU by chisel.
 
 It's designed to run on Xilinx xc7z035 ffg676.
+
+*not finished*
