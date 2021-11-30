@@ -3,22 +3,6 @@ package final_project
 import chisel3._
 import chisel3.util._
 
-class Address(val addr_w: Int) extends Bundle{
-    val addr = UInt(addr_w.W)
-    def inc(x: UInt): UInt = {
-        addr := addr+x
-        return addr
-    }
-}
-
-object Address{
-    def zero(addr_w: Int): Address{
-        val ret = new Address(addr_w)
-        ret.addr = 0.U(addr_w)
-        return ret
-    }
-}
-
 class BigBankWriteData(val w: Int, val addr_w: Int) extends Bundle{
     val data = Vec(48, SInt(w.W))
     val addr = new Address(addr_w)
@@ -31,7 +15,7 @@ class SmallBankWriteData(val w: Int, val addr_w: Int) extends Bundle{
     val wra = Bool()
 }
 
-class WriteJob(val addr_w: Int, val h_w: Int, val c_w: Int) extends Bundle{
+class WriteJob(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int) extends Bundle{
     val begin_addr = UInt(addr_w.W)
     val max_addr = UInt(addr_w.W)
     val min_addr = UInt(addr_w.W)
@@ -40,6 +24,7 @@ class WriteJob(val addr_w: Int, val h_w: Int, val c_w: Int) extends Bundle{
     val al = UInt(c_w.W)
     val ar = UInt(c_w.W)
     val block_size = UInt(c_w.W)
+    val bank_id = UInt(id_w.W)
 }
 
 // 2 groups, each group has:
@@ -50,13 +35,13 @@ class WriteJob(val addr_w: Int, val h_w: Int, val c_w: Int) extends Bundle{
 // c_w: w(num of channels)
 
 
-class Writer(val w: Int, val addr_w: Int, val h_w: Int, val c_w: Int) extends Module{
+class Writer(val w: Int, val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int) extends Module{
     val io = IO(new Bundle{
         val in_from_quant = Input(new QuantedData(w))
         val valid_in = Input(Bool())
         val valid_out = Output(Bool())
         val flag_job = Input(Bool())
-        val job = Input(new WriteJob(addr_w, h_w, c_w))
+        val job = Input(new WriteJob(addr_w, h_w, c_w, id_w))
         val to_bigbank = Output(new BigBankWriteData(w, addr_w))
         val to_smallbank = Output(Vec(4, new SmallBankWriteData(w, addr_w)))
     })

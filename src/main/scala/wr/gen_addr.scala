@@ -3,8 +3,34 @@ package final_project
 import chisel3._
 import chisel3.util._
 
-// remember this is register, not wire
-trait GenAddress extends Bundle{
+class Address(val addr_w: Int, val id_w: Int) extends Bundle{
+    val addr = UInt(addr_w.W)
+    val bank_id = UInt(id_w.W)
+}
+
+object Address{
+    def apply(val addr_w: Int, val id_w: Int) = new Address(addr_w, id_w)
+    def apply(val addr: UInt, val id: UInt) = Data {
+        val ret := Wire(Address(addr.getWidth, id.getWidth))
+        ret.addr := addr
+        ret.id := id
+        return ret
+    }
+}
+
+class AddressGroup(val addr_w: Int, val id_w: Int) extends Bundle{
+    val addrs = Vec(5, Address(addr_w, id_w))
+}
+
+trait GenAddressInterface{
+    def gen_conv(): Unit
+    def gen_maxp(): Unit
+    def gen_through(): Unit
+    def output(): Data
+}
+
+// remember this is a register, not wire
+trait GenAddress extends Bundle with GenAddressInterface{
     val block_num: UInt             // [0, block_num=block_size-1]
     val dist_nxt_height: UInt       // H*block_size
     val max_addr: UInt
@@ -17,14 +43,10 @@ trait GenAddress extends Bundle{
     val x: UInt
     val y: UInt
     val flag_end: Bool
-    def reset(): Unit = {
-        now_addr := begin_addr
-    }
+    val bank_id: UInt
     def clamp(addr: UInt): UInt = {
         return Mux(addr>=max_addr, addr-max_addr+min_addr, addr)
     }
-    def gen_conv(): UInt    // conv and ups
-    def gen_maxp(): UInt
 }
 
 class GenReadBankAddress extends GenAddress{
@@ -84,6 +106,13 @@ class GenReadBankAddress extends GenAddress{
         }
         now_addr := clamp(nxt_addr)
     }
+    override def gen_through(): Unit = {
+        flag_end := flag_end||(x===width&&y===height&&a_end)
+        nxt()
+    }
+    override def output(): Data = {
+        return Address(now_addr, bank_id)
+    }
 }
 
 
@@ -107,13 +136,15 @@ class GenWriteBankAddress extends GenAddress{
         now_addr := clamp(now_addr+1.U)
         return now_addr
     }
+    override def gen_through(): Unit = {
+        gen_maxp()
+    }
+    override def output(): Data = {
+        return Address(now_addr, bank_id)
+    }
 }
 
-object ReadBigBank{
-    def apply()
-} 
-
-object WriteBigBank{
+object WriteBank{
     def apply() = new GenWriteBankAddress()
     def apply(job: WriteJob) = Data {
         ret := Wire(new GenWriteBankAddress)
@@ -132,11 +163,12 @@ object WriteBigBank{
         ret.y := 0.U
         ret.now_addr := job.begin_addr
         ret.flag_end := false.B
+        ret.bank_id := job.bank_id
         return ret
     }
 }
 
-object ReadBigBank{
+object ReadBank{
     def apply() = new GenReadBankAddress()
     def apply(job: ReadJob) = Data {
         ret := Wire(new GenReadBankAddress)
@@ -158,6 +190,91 @@ object ReadBigBank{
     }
 }
 
-class ReadGroup{
-    
+class ReadGroup extends GenAddressInterface{
+    val big = ReadBank()
+    val small = Vec(4, ReadBank())
+    override def gen_conv(): UInt = {
+        big.get_conv()
+        for(i <- 0 to 3)
+            small(i).get_conv()
+    }
+    override def gen_maxp(): UInt = {
+        big.get_maxp()
+        for(i <- 0 to 3)
+            small(i).get_maxp()
+    }
+    override def gen_through(): UInt = {
+        big.get_through()
+        for(i <- 0 to 3)
+            small(i).get_through()
+    }
+    override def output(): Data = {
+        val ret = Wire(new AddressGroup(big.now_addr.getWidth, big.bank_id.getWidth))
+        ret(0) := big.output()
+        for(i <- 1 to 4)
+            ret(i) := small(i-1).output()
+        return ret 
+    }
+    def is_end(): Data = {
+        return big.flag_end
+    }
+}
+
+class WriteGroup extends GenAddressInterface{
+    val big = WriteBank()
+    val small = Vec(4, WriteBank())
+    override def gen_conv(): UInt = {
+        big.get_conv()
+        for(i <- 0 to 3)
+            small(i).get_conv()
+    }
+    override def gen_maxp(): UInt = {
+        big.get_maxp()
+        for(i <- 0 to 3)
+            small(i).get_maxp()
+    }
+    override def gen_through(): UInt = {
+        big.get_through()
+        for(i <- 0 to 3)
+            small(i).get_through()
+    }
+    override def output(): Data = {
+        val ret = Wire(new AddressGroup(big.now_addr.getWidth, big.bank_id.getWidth))
+        ret(0) := big.output()
+        for(i <- 1 to 4)
+            ret(i) := small(i-1).output()
+        return ret 
+    }
+    def is_end(): Data = {
+        return big.flag_end
+    }
+}
+
+object ReadGroup{
+    def apply() = new ReadGroup()
+    def apply(big_job: ReadJob, small_job: Vec(4, ReadJob())): Data = {
+        val ret = Wire(new ReadGroup())
+        ret.big := ReadBank(big_job)
+        for(i <- 0 to 3)
+            ret.small(i) := ReadBank(small_job(i))
+        return ret 
+    }
+    def apply(job: ReadGroupJob): Data = {
+        return apply(job.big, job.small)
+    }
+}
+
+
+object WriteGroup{
+    def apply() = new WriteGroup()
+    def apply(big_job: WriteJob, small_job: Vec(4, WriteJob())): Data = {
+        val ret = Wire(new WriteGroup())
+        ret.big := WriteBank(big_job)
+        for(i <- 0 to 3)
+            ret.small(i) := WriteBank(small_job(i))
+        return ret 
+    }
+    def apply(job: WriteGroupJob): Data = {
+        return apply(job.big, job.small)
+    }
 }
