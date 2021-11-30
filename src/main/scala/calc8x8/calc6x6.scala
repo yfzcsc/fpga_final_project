@@ -46,7 +46,7 @@ class Calc6x6(val w: Int) extends Module{
     val io = IO(new Bundle{
         val input = Input(new InputData(w))
         val flag = Input(CalcType())
-        val weight = Input(new WeightData(w))
+        val weight = Input(new WeightData())
         val output = Output(new OutputData(w))
         val valid_in = Input(Bool())
         val valid_out = Output(Bool())
