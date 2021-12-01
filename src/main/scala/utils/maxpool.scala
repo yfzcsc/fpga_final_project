@@ -5,19 +5,19 @@ import chisel3.util._
 
 class Maxpool(val w: Int) extends Module{
     val io = IO(new Bundle{
-        val data = Input(PackedData(w))
-        val result = Output(QuantedData(w))
+        val data = Input(new PackedData(w))
+        val result = Output(new QuantedData(w))
         val valid_in = Input(Bool())
         val valid_out = Output(Bool())
     })
     val state = RegInit(Reg(UInt(2.W)))
-    val output = RegInit(Reg(QuantedData(w)))
+    val output = RegInit(Reg(new QuantedData(w)))
     val cache = Wire(Vec(16, SInt(w.W)))
 
-    valid_out := false.B
-    result := 0.U.asTypeOf(result)
+    io.valid_out := false.B
+    io.result := 0.U.asTypeOf(io.result)
 
-    when(valid_in){
+    when(io.valid_in){
         for(ii <- 0 to 3)
             for(jj <- 0 to 3){
                 val w4 = Wire(Vec(4, SInt(w.W)))
@@ -25,7 +25,7 @@ class Maxpool(val w: Int) extends Module{
                 val b2 = Wire(SInt(w.W))
                 for(i <- 0 to 1)
                     for(j <- 0 to 1)
-                        w4(i*2+j) := data((ii*2+i)*8+(jj*2+j))
+                        w4(i*2+j) := io.data.mat((ii*2+i)*8+(jj*2+j))
                 a2 := Mux(w4(0)<w4(1), w4(1), w4(0))
                 b2 := Mux(w4(2)<w4(3), w4(2), w4(3))
                 cache(ii*4+jj) := Mux(a2<b2, b2, a2)
@@ -52,19 +52,19 @@ class Maxpool(val w: Int) extends Module{
             is(3.U){
                 for(i <- 0 to 3)
                     for(j <- 0 to 3)
-                        result.mat(i*8+j) := output.mat(i*8+j)
+                        io.result.mat(i*8+j) := output.mat(i*8+j)
                 for(i <- 0 to 3)
                     for(j <- 0 to 3)
-                        result.mat(i*8+j+4) := output.mat(i*8+j+4)
+                        io.result.mat(i*8+j+4) := output.mat(i*8+j+4)
                 
                 for(i <- 0 to 3)
                     for(j <- 0 to 3)
-                        result.mat((i+4)*8+j) := output.mat((i+4)*8+j)
+                        io.result.mat((i+4)*8+j) := output.mat((i+4)*8+j)
 
                 for(i <- 0 to 3)
                     for(j <- 0 to 3)
-                        result.mat((i+4)*8+j+4) := cache(i*4+j)
-                valid_out := true.B
+                        io.result.mat((i+4)*8+j+4) := cache(i*4+j)
+                io.valid_out := true.B
                 state := 0.U
             }
         }

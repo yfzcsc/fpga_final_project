@@ -10,6 +10,7 @@ class WRJob(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bundle{
     val cnt_end = UInt(h_w.W)
     val block_num = UInt(c_w.W)
     val bank_id = UInt(id_w.W)
+    val dist_nxt_width = UInt(h_w.W)
 }
 
 class WriteBigJob(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends WRJob(addr_w, h_w, c_w, id_w){

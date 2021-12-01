@@ -14,8 +14,8 @@ class WeightReader(val w: Int, val addr_w: Int) extends Module{
     val now_addr = RegInit(Reg(UInt(addr_w.W)))
     io.addr := 0.U
 
-    when(flag_job){
-        now_addr := begin_addr
+    when(io.flag_job){
+        now_addr := io.begin_addr
     }.elsewhen(io.enable){
         now_addr := now_addr+1.U
         io.addr := now_addr

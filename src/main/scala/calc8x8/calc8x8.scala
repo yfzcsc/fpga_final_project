@@ -20,12 +20,11 @@ class Calc8x8(val w: Int) extends Module{
     val io = IO(new Bundle{
         val input = Input(new PackedData(w))
         val flag = Input(CalcType())
-        val weight = Input(Vec(4, new WeightData(w)))
+        val weight = Input(Vec(4, new WeightData()))
         val output = Output(new RawData(w))
         val valid_in = Input(Bool())
         val valid_out = Output(Bool())
     })
-
     def get_one(a: PackedData, x: Int, y: Int): Data = {
         if(x==0) return a.up(y)
         if(x==9) return a.down(y)
@@ -57,15 +56,16 @@ class Calc8x8(val w: Int) extends Module{
                 ret.mat(i*8+j) := a3.mat((i-4)*4+(j-4))
         return ret
     }
-    
     val A = VecInit(Seq.fill(4)(Module(new Calc6x6(w)).io))
     for(i <- 0 to 3){
-        A(i).input := 0.S.asTypeOf(A(i).input)
-        A(i).flag := CalcType.saveWeight
-        A(i).weight := 0.S.asTypeOf(A(i).weight)
+        A(i).input := 0.U.asTypeOf(A(i).input)
+        A(i).flag := 0.U.asTypeOf(A(i).flag)
+        A(i).weight := 0.U.asTypeOf(A(i).weight)
+        A(i).valid_in := false.B
     }
         
-    io.output := 0.S.asTypeOf(io.output)
+    io.output := 0.U.asTypeOf(io.output)
+    io.valid_out := false.B
 
     switch(io.flag){
         is(CalcType.leakyReLU){
@@ -73,31 +73,38 @@ class Calc8x8(val w: Int) extends Module{
             A(1).input := get_area(io.input, 1, 4, 4, 8)
             A(2).input := get_area(io.input, 4, 1, 8, 4)
             A(3).input := get_area(io.input, 4, 4, 8, 8)
-            for(i <- 0 to 3)
+            for(i <- 0 to 3){
                 A(i).flag := CalcType.leakyReLU
+                A(i).valid_in := io.valid_in
+            }
             io.output := set_output(A(0).output, A(1).output, A(2).output, A(3).output)
+            io.valid_out := A(0).valid_out
         }
         is(CalcType.calcMult){
             A(0).input := get_area(io.input, 1, 1, 4, 4)
             A(1).input := get_area(io.input, 1, 4, 4, 8)
             A(2).input := get_area(io.input, 4, 1, 8, 4)
             A(3).input := get_area(io.input, 4, 4, 8, 8)
-            for(i <- 0 to 3)
+            for(i <- 0 to 3){
                 A(i).weight := io.weight(i)
-            for(i <- 0 to 3)
-                A(i).flag := CalcType.preCalcMult
+                A(i).flag := CalcType.calcMult
+                A(i).valid_in := io.valid_in
+            }
             io.output := set_output(A(0).output, A(1).output, A(2).output, A(3).output)
+            io.valid_out := A(0).valid_out
         }
         is(CalcType.calcConv){
             A(0).input := get_area(io.input, 0, 0, 5, 5)
             A(1).input := get_area(io.input, 0, 4, 5, 9)
             A(2).input := get_area(io.input, 4, 0, 9, 5)
             A(3).input := get_area(io.input, 4, 4, 9, 9)
-            for(i <- 0 to 3)
+            for(i <- 0 to 3){
                 A(i).weight := io.weight(i)
-            for(i <- 0 to 3)
-                A(i).flag := CalcType.preCalcMult
+                A(i).flag := CalcType.calcConv
+                A(i).valid_in := io.valid_in
+            }
             io.output := set_output(A(0).output, A(1).output, A(2).output, A(3).output)
+            io.valid_out := A(0).valid_out
         }
     }
 }

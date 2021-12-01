@@ -18,9 +18,9 @@ class PackReadData(val w: Int, val h_w: Int) extends Module{
         val flag_job = Input(Bool())
         val height_in = Input(UInt(h_w.W))          // H-1
         val from_big0 = Input(new BigBankReadData(w))
-        val from_small0 = Input(new SmallBankReadData(w))
+        val from_small0 = Input(Vec(4, new SmallBankReadData(w)))
         val from_big1 = Input(new BigBankReadData(w))
-        val from_small1 = Input(new SmallBankReadData(w))
+        val from_small1 = Input(Vec(4, new SmallBankReadData(w)))
         val output = Output(new PackedData(w))
     })
     val state = RegInit(Reg(UInt(h_w.W)))
@@ -28,7 +28,7 @@ class PackReadData(val w: Int, val h_w: Int) extends Module{
     val cache = RegInit(Reg(Vec(10, SInt(w.W))))
 
     io.valid_out := false.B
-    io.output := 0.U.asTypeOf(output)
+    io.output := 0.U.asTypeOf(io.output)
     when(io.flag_job){
         height := io.height_in
     }
@@ -54,7 +54,7 @@ class PackReadData(val w: Int, val h_w: Int) extends Module{
         }
     }
     def copyup(flag: Int): Unit = {
-        if(flag==-1){
+        if(flag == -1){
             for(i <- 2 to 7)
                 io.output.up(i) := io.from_big0.data(6+i-1)
             io.output.up(0) := io.from_small0(0).data(1)
@@ -66,7 +66,7 @@ class PackReadData(val w: Int, val h_w: Int) extends Module{
         }
     }
 
-    def save_cache(flag: Int): UInt = {
+    def save_cache(flag: Int): Unit = {
         if(flag==0){
             for(i <- 2 to 7)
                 cache(i) := io.from_big0.data(48-6+i-2)
@@ -85,8 +85,8 @@ class PackReadData(val w: Int, val h_w: Int) extends Module{
         
     }
 
-    def copydown(flag: Int): UInt = {
-        if(flag==-1){
+    def copydown(flag: Int): Unit = {
+        if(flag == -1){
             for(i <- 2 to 7)
                 io.output.down(i) := io.from_big0.data(48-12+i-2)
             io.output.down(0) := io.from_small0(0).data(6)
