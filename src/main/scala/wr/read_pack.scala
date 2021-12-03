@@ -11,47 +11,38 @@ class SmallBankReadData(val w: Int) extends Bundle{
     val data = Vec(8, SInt(w.W))
 }
 
-class PackReadData(val w: Int, val h_w: Int) extends Module{
+class PackReadData(val w: Int, val h_w: Int, val c_w: Int) extends Module{
     val io = IO(new Bundle{
         val valid_in = Input(Bool())
         val valid_out = Output(Bool())
         val flag_job = Input(Bool())
         val height_in = Input(UInt(h_w.W))          // H-1
-        val from_big0 = Input(new BigBankReadData(w))
-        val from_small0 = Input(Vec(4, new SmallBankReadData(w)))
-        val from_big1 = Input(new BigBankReadData(w))
-        val from_small1 = Input(Vec(4, new SmallBankReadData(w)))
+        val in_chan = Input(UInt(c_w.W))
+        val from_big = Input(new BigBankReadData(w))
+        val from_small = Input(Vec(4, new SmallBankReadData(w)))
         val output = Output(new PackedData(w))
     })
-    val state = RegInit(Reg(UInt(h_w.W)))
-    val height = RegInit(Reg(UInt(h_w.W)))
-    val cache = RegInit(Reg(Vec(10, SInt(w.W))))
+    val state = RegInit(0.U.asTypeOf(UInt(h_w.W)))
+    val height = RegInit(0.U.asTypeOf(UInt(h_w.W)))
+    val cache = RegInit(0.U.asTypeOf(Vec(64, Vec(10, SInt(w.W)))))
+
+    val cnt_ic = ACounter(c_w.W)
 
     io.valid_out := false.B
     io.output := 0.U.asTypeOf(io.output)
     when(io.flag_job){
         height := io.height_in
+        cnt_ic.set(in_chan)
     }
     def copy64_left_right(flag: Int): Unit = {
-        if(flag==0){
-            for(i <- 0 to 7){
-                for(j <- 1 to 6)
-                    io.output.mat(i*8+j) := io.from_big0.data(i*6+(j-1))
-                io.output.mat(i*8+0) := io.from_small0(1).data(i)
-                io.output.mat(i*8+7) := io.from_small0(2).data(i)
-            }
-            io.output.left := io.from_small0(0)
-            io.output.right := io.from_small0(3)
-        } else {
-            for(i <- 0 to 7){
-                for(j <- 1 to 6)
-                    io.output.mat(i*8+j) := io.from_big1.data(i*6+(j-1))
-                io.output.mat(i*8+0) := io.from_small1(1).data(i)
-                io.output.mat(i*8+7) := io.from_small1(2).data(i)
-            }
-            io.output.left := io.from_small1(0)
-            io.output.right := io.from_small1(3)
+        for(i <- 0 to 7){
+            for(j <- 1 to 6)
+                io.output.mat(i*8+j) := io.from_big0.data(i*6+(j-1))
+            io.output.mat(i*8+0) := io.from_small0(1).data(i)
+            io.output.mat(i*8+7) := io.from_small0(2).data(i)
         }
+        io.output.left := io.from_small0(0)
+        io.output.right := io.from_small0(3)
     }
     def copyup(flag: Int): Unit = {
         if(flag == -1){
@@ -111,7 +102,10 @@ class PackReadData(val w: Int, val h_w: Int) extends Module{
     }
     when(io.valid_in){
         io.valid_out := true.B
-        state := Mux(state===height, 0.U, state+1.U)
+        when(cnt_ic.inc()){
+            state := Mux(state===height, 0.U, state+1.U)
+        }
+        
         when(state===0.U){
             copy64_left_right(0)
             copyup(-1)
@@ -130,11 +124,6 @@ class PackReadData(val w: Int, val h_w: Int) extends Module{
                 copyup(0)
                 copydown(0)
             }
-        }
-        when(state(0)){
-            save_cache(1)
-        }.otherwise{
-            save_cache(0)
         }
     }
 }
