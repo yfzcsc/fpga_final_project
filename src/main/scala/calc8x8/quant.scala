@@ -16,8 +16,8 @@ class QuantJob(val w: Int) extends Bundle{
         val ret2 = Wire(((1<<(w-1))-1).S(w.W))
         val ret3 = Wire((-(1<<(w-1))).S(w.W))
         ret1 := x<<a
-        return Mux(x(x.getWidth-1),
-            Mux(x(x.getWidth-1, 15.U-a).andR, 
+        return Mux(x((x.getWidth-1)),
+            Mux(x((x.getWidth-1).U, 15.U-a).andR, 
                 ret1,
                 ret3
             ),
@@ -42,36 +42,24 @@ class QuantJob(val w: Int) extends Bundle{
                 ret1
             )
         )
-    }*/
+    }
+    */
+    
     def clamp_ls(x: SInt, a: UInt): Data = {
-        val ret2 = Wire(((1<<(w-1))-1).S(w.W))
-        val ret3 = Wire((-(1<<(w-1))).S(w.W))
+        val ret2 = ((1<<(w-1))-1).S(64.W)
+        val ret3 = (-(1<<(w-1))).S(64.W)
         val ret1 = Wire(SInt(64.W))
         ret1 := x<<a
-        when(ret1<=ret3){
-            return ret3
-        }.elsewhen(ret1>=ret2){
-            return ret2
-        }.otherwise{
-            return ret1((w-1), 0)
-        }
-        return ret1((w-1), 0)
+        return Mux(ret1<=ret3, ret3, Mux(ret1>=ret2, ret2, ret1))
     }
     def clamp_rs(x: SInt, a: UInt): Data = {
-        val ret2 = Wire(((1<<(w-1))-1).S(w.W))
-        val ret3 = Wire((-(1<<(w-1))).S(w.W))
+        val ret2 = ((1<<(w-1))-1).S(64.W)
+        val ret3 = (-(1<<(w-1))).S(64.W)
         val ret1 = Wire(SInt(64.W))
         ret1 := x>>a
-        when(ret1<=ret3){
-            return ret3
-        }.elsewhen(ret1>=ret2){
-            return ret2
-        }.otherwise{
-            return ret1((w-1), 0)
-        }
-        return ret1((w-1), 0)
+        return Mux(ret1<=ret3, ret3, Mux(ret1>=ret2, ret2, ret1))
     }
-    def F[T <: Data](in: SInt): Data = {
+    def F(in: SInt): Data = {
         return Mux(in_q<=out_q, clamp_ls(in, out_q-in_q), clamp_rs(in, in_q-out_q))
     }
 }
@@ -87,11 +75,12 @@ class Quant(val w: Int) extends Module{
     })
 
 
-    val quant = RegInit(Reg(new QuantJob(w)))
+    val quant = RegInit(0.U.asTypeOf(new QuantJob(w)))
 
     io.valid_out := false.B
+    io.result := 0.U.asTypeOf(new QuantedData(w))
+    
     when(io.flag_job){
-        
         quant := io.quant_in
     }.otherwise{
         io.valid_out := io.valid_in

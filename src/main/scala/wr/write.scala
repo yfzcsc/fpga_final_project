@@ -32,8 +32,7 @@ class Writer(val w: Int, val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: 
         val to_banks = Output(new AddressWriteGroup(addr_w, id_w))
     })
 
-    val gen = RegInit(Reg(new WriteGroup(addr_w, id_w)))
-    val job_type = RegInit(Reg(ReadType()))
+    val gen = RegInit(0.U.asTypeOf(new WriteGroup(addr_w, h_w, c_w, id_w)))
 
     io.valid_out := false.B 
     io.to_bigbank := 0.U.asTypeOf(io.to_bigbank)
@@ -53,7 +52,7 @@ class Writer(val w: Int, val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: 
             for(i <- 0 to 7)
                 io.to_smallbank(1).data(i) := io.in_from_quant.mat(i*8+7)
             io.to_banks := gen.output()
-            gen.gen_conv()
+            gen.go()
         }
     }
 }
@@ -72,8 +71,8 @@ class CacheWriter(val w: Int, val addr_w: Int, val num: Int, val h_w: Int, val c
     })
 
     val writers = VecInit(Seq.fill(num)(Module(new Writer(w, addr_w, h_w, c_w, id_w)).io))
-    val cache = RegInit(Reg(VecInit(Seq.fill(num)(new QuantedData(w)))))
-    val cache_valid = RegInit(Reg(Vec(num, Bool())))
+    val cache = RegInit(0.U.asTypeOf(VecInit(Seq.fill(num)(new QuantedData(w)))))
+    val cache_valid = RegInit(0.U.asTypeOf(Vec(num, Bool())))
     val now = PriorityMux(Seq.tabulate(num){i => cache_valid(i)}, Seq.tabulate(num){i => i.U})
 
     io.to_bigbank := 0.U.asTypeOf(io.to_bigbank)

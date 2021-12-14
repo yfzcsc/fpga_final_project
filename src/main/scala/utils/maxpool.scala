@@ -10,8 +10,8 @@ class Maxpool(val w: Int) extends Module{
         val valid_in = Input(Bool())
         val valid_out = Output(Bool())
     })
-    val state = RegInit(Reg(UInt(2.W)))
-    val output = RegInit(Reg(new QuantedData(w)))
+    val state = RegInit(0.U(2.W))
+    val output = RegInit(0.U.asTypeOf(new QuantedData(w)))
     val cache = Wire(Vec(16, SInt(w.W)))
 
     io.valid_out := false.B

@@ -8,7 +8,7 @@ import org.scalatest._
 import chisel3.experimental.BundleLiterals._
 import chisel3.iotesters._
 
-class Tester(dut: Calc8x8) extends PeekPokeTester(dut) {
+class Calc8x8Tester(dut: Calc8x8) extends PeekPokeTester(dut) {
 
     //val rnd = new scala.util.Random
     var A = Array.tabulate(10, 10) {
@@ -130,7 +130,7 @@ class Calc8x8Spec extends FlatSpec with Matchers {
 
   it should "Calc8x8 should pass" in {
         chisel3.iotesters.Driver(() => new Calc8x8(16)) { c =>
-            new Tester(c)
+            new Calc8x8Tester(c)
         } should be (true)
     }
 }

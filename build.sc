@@ -28,7 +28,8 @@ object fpga_final_project extends SbtModule { m =>
   )
   object test extends Tests with ScalaTest {
     override def ivyDeps = m.ivyDeps() ++ Agg(
-      ivy"edu.berkeley.cs::chiseltest:0.3.3"
+      ivy"edu.berkeley.cs::chiseltest:0.3.3",
+      ivy"edu.berkeley.cs::chisel-iotesters:1.5.3"
     )
   }
 }

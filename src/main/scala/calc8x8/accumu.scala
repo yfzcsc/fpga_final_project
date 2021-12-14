@@ -23,32 +23,38 @@ class Accumu(w: Int, addr_w: Int, bias_w: Int) extends Module{
         val valid_out = Output(Bool())
         val flag_job = Input(Bool())
         val csum = Input(new AccumuCounter())
-        val begin_addr = Input(UInt(addr_w.W))
+        val bias_begin_addr = Input(UInt(addr_w.W))
+        val bias_end_addr = Input(UInt(addr_w.W))
         val bias_addr = Output(UInt(addr_w.W))
         val bias_in = Input(SInt(bias_w.W))
         val is_in_use = Input(Bool())
     })
 
-    val counter = RegInit(Reg(new AccumuCounter()))
-    val output = RegInit(Reg(new AccumuRawData(w)))
-    val now_addr = RegInit(Reg(UInt(addr_w.W)))
-    val enable = RegInit(Reg(Bool()))
+    val counter = RegInit(0.U.asTypeOf(new AccumuCounter()))
+    val output = RegInit(0.U.asTypeOf(new AccumuRawData(w)))
+    val now_addr = RegInit(0.U.asTypeOf(ACounter(addr_w)))
+    val enable = RegInit(false.B)
 
+    io.result := 0.U.asTypeOf(new AccumuRawData(w))
     io.valid_out := false.B
-    io.bias_addr := now_addr
+    io.bias_addr := now_addr.ccnt
+    
     when(io.flag_job){
         counter := io.csum
         output := 0.S.asTypeOf(output)
-        now_addr := io.bias_addr
+        now_addr.set(io.bias_begin_addr, io.bias_end_addr)
         enable := io.is_in_use
     }.elsewhen(enable){
         when(io.valid_in){
-            when(counter.csum===0.U){
-                io.valid_out := true.B
-                for(i <- 0 to 63)  
-                    io.result.mat(i) := output.mat(i)
+            when(counter.csum===counter.fsum){
+                io.valid_out := false.B
                 for(i <- 0 to 63)  
                     output.mat(i) := io.in_from_calc8x8.mat(i)+io.bias_in
+                counter.csum := counter.csum-1.U
+            }.elsewhen(counter.csum===0.U){
+                io.valid_out := true.B
+                for(i <- 0 to 63)  
+                    io.result.mat(i) := io.in_from_calc8x8.mat(i)+output.mat(i)
                 counter.csum := counter.fsum
             }.otherwise{
                 io.valid_out := false.B
@@ -57,7 +63,7 @@ class Accumu(w: Int, addr_w: Int, bias_w: Int) extends Module{
                 counter.csum := counter.csum-1.U
             }
             when(counter.csum===1.U){
-                now_addr := now_addr+1.U
+                now_addr.inc()
             }
         }
         
