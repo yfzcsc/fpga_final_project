@@ -42,7 +42,7 @@ abstract class GenAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bu
     val cnt_y = ACounter(h_w.W)
     val bank_id = UInt(id_w.W)
     val block_size = UInt(c_w.W)
-    val column_size = UInt(c_w.W)
+    val column_size = UInt(addr_w.W)
     def clamp(addr: UInt): UInt = {
         val nxt = Wire(UInt(addr_w.W))
         when(addr>=max_addr){
@@ -72,8 +72,8 @@ class GenReadBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends 
     val cnt_loop = ACounter(h_w.W)
     val cnt_ups = ACounter(1.W)
     val cnt_maxp = ACounter(2.W)
-    val y_begin_addr = UInt(h_w.W)
-    val ic_begin_addr = UInt(h_w.W)
+    val y_begin_addr = UInt(addr_w.W)
+    val ic_begin_addr = UInt(addr_w.W)
     val flag_end = Bool() 
     override def go(): Unit = {
         val nxt_addr = Wire(UInt(addr_w.W))
@@ -141,6 +141,7 @@ class GenReadBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends 
     }
     def set(x: ReadBigJob): Unit = {
         super.set(x)
+        flag_end := false.B
         cnt_loop.set(x.begin_loop, x.cnt_loop_end)
         cnt_ups.set(x.cnt_ups_end)
         cnt_maxp.set(3.U)
@@ -156,8 +157,8 @@ class GenReadSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extend
     val cnt_ups = ACounter(1.W)
     val cnt_loop = ACounter(h_w.W)
     val cnt_swap = ACounter(1.W)
-    val y_begin_addr = UInt(h_w.W)
-    val ic_begin_addr = UInt(h_w.W)
+    val y_begin_addr = UInt(addr_w.W)
+    val ic_begin_addr = UInt(addr_w.W)
     val start = Bool()
     override def go(): Unit = {
         val nxt_addr = Wire(UInt(addr_w.W))
@@ -230,7 +231,7 @@ class GenReadSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extend
         cnt_invalid.set(x.cnt_invalid_end)
         cnt_ups.set(x.cnt_ups_end)
         cnt_maxp.set(3.U)
-        cnt_swap.set(1.U)
+        cnt_swap.set(x.begin_swap, 1.U)
         start := false.B
         y_begin_addr := x.begin_addr
         ic_begin_addr := x.begin_addr
@@ -279,7 +280,6 @@ class GenWriteBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends
     val a = UInt(c_w.W) 
     override def go(): Unit = {
         val nxt_addr = Wire(UInt(addr_w.W))
-        nxt_addr := 0.U
         when(cnt_ic.inc()){
             nxt_addr := now_addr+a
         }.otherwise{

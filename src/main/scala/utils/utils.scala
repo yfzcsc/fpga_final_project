@@ -3,6 +3,12 @@ package final_project
 import chisel3._
 import chisel3.experimental.ChiselEnum
 
+class TransBundle extends Bundle{
+    val valid_in = Input(Bool())
+    val valid_out = Output(Bool())
+    val flag_job = Input(Bool())
+}
+
 class ACounter(val w: chisel3.internal.firrtl.Width) extends Bundle{
     val ccnt = UInt(w)
     val cend = UInt(w)

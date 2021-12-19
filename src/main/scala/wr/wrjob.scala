@@ -36,6 +36,7 @@ class ReadSmallJob(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends WRJob(add
     val begin_loop = UInt(h_w.W)
     val cnt_invalid_end = UInt(h_w.W)
     val cnt_ups_end = UInt(1.W)
+    val begin_swap = UInt(1.W)
 }
 
 class ReadJobs(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bundle{
@@ -46,6 +47,11 @@ class ReadJobs(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bundle{
 class WriteJobs(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bundle{
     val big = new WriteBigJob(addr_w, h_w, c_w, id_w)
     val small = Vec(2, new WriteSmallJob(addr_w, h_w, c_w, id_w))
+}
+
+class RealWriteJobs(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bundle{
+    val job = Vec(2, new WriteJobs(addr_w, h_w, c_w, id_w))
+    val out_chan = UInt(c_w.W)
 }
 
 object GenConvReadJob{
@@ -86,6 +92,11 @@ object GenConvReadJob{
                 ret.small(i).bank_id := bank_id_small(i).U
                 ret.small(i).ano_bank_id := bank_id_small(i^2).U    
             }
+            if(i==3){
+                ret.small(i).begin_swap := (1).U
+            } else {
+                ret.small(i).begin_swap := 0.U
+            }
             
         }
         return ret
@@ -95,7 +106,7 @@ object GenConvReadJob{
 
 object GenWriteConvJob{
     def gen(addr_w: Int, h_w: Int, c_w: Int, id_w: Int, 
-            h: Int, w: Int, in_chan: Int, begin_addr: Int, min_addr: Int, max_addr: Int,
+            h: Int, w: Int, out_chan: Int, begin_addr: Int, min_addr: Int, max_addr: Int,
             small_begin_addr: Int, small_min_addr: Int, small_max_addr: Int, 
             bank_id_big: Int, bank_id_small: Array[Int], al: Int, ar: Int): WriteJobs = {
         val ret = Wire(new WriteJobs(addr_w, h_w, c_w, id_w))
@@ -103,22 +114,22 @@ object GenWriteConvJob{
         ret.big.min_addr := min_addr.U
         ret.big.max_addr := max_addr.U
         ret.big.bank_id := bank_id_big.U
-        ret.big.block_size := in_chan.U
-        ret.big.column_size := (in_chan*h).U
+        ret.big.block_size := out_chan.U
+        ret.big.column_size := (out_chan*h).U
         ret.big.cnt_x_end := (w-1).U
         ret.big.cnt_y_end := (h-1).U
         ret.big.cnt_ic_end := (ar-al).U
-        ret.big.a := (in_chan-ar+al).U
+        ret.big.a := (out_chan-ar+al).U
         for(i <- 0 to 1){
             ret.small(i).begin_addr := small_begin_addr.U
             ret.small(i).min_addr := small_min_addr.U
             ret.small(i).max_addr := small_max_addr.U
-            ret.small(i).block_size := in_chan.U
-            ret.small(i).column_size := (in_chan*h).U
+            ret.small(i).block_size := out_chan.U
+            ret.small(i).column_size := (out_chan*h).U
             ret.small(i).cnt_x_end := (w/2-1).U
             ret.small(i).cnt_y_end := (h-1).U
             ret.small(i).cnt_ic_end := (ar-al).U
-            ret.small(i).a := (in_chan-ar+al).U
+            ret.small(i).a := (out_chan-ar+al).U
             ret.small(i).bank_id := bank_id_small(i).U
             ret.small(i).ano_bank_id := bank_id_small(i+2).U
         }

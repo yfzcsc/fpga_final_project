@@ -24,7 +24,7 @@ class ReadConvTestModule(addr_w: Int, h_w: Int, c_w: Int, id_w: Int, loop_num: I
     r.io.flag_job := false.B
     r.io.job := 0.U.asTypeOf(r.io.job)
     r.io.job_type := 0.U.asTypeOf(r.io.job_type)
-    r.io.enable := false.B
+    r.io.valid_in := false.B
     io.to_banks := r.io.to_banks
     io.valid_out := r.io.valid_out
     when(io.start){
@@ -39,12 +39,12 @@ class ReadConvTestModule(addr_w: Int, h_w: Int, c_w: Int, id_w: Int, loop_num: I
                     h, w, in_chan, begin_addr, max_addr, min_addr, small_begin_addr, small_min_addr, small_max_addr,
                     bank_id_big, bank_id_small
                 )
-                r.io.enable := true.B
+                r.io.valid_in := true.B
                 state := 2.U
             }
             is(2.U){
                 r.io.flag_job := false.B
-                r.io.enable := true.B
+                r.io.valid_in := true.B
                 r.io.job_type := ReadType.toConvOrCopy
                 state := 2.U
             }
@@ -115,7 +115,7 @@ class ReadConvSpec extends FlatSpec with Matchers {
                             )
                             std(x)(4) = (
                                 (if(i==w-1) -1 else bank_id_small(if(i%2==0) 3 else 1)),
-                                f(((i/2)*(h)+j)*in_chan+k+small_begin_addr, small_min_addr, small_max_addr)
+                                f((((i+1)/2)*(h)+j)*in_chan+k+small_begin_addr, small_min_addr, small_max_addr)
                             )
                             std(x)(0) = (
                                 bank_id_big,

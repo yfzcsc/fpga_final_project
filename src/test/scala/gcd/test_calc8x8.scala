@@ -30,23 +30,24 @@ class Calc8x8Tester(dut: Calc8x8) extends PeekPokeTester(dut) {
         poke(dut.io.input.down(i), A(9)(i))
     }
 
-    val B = Array.fill[Int](3, 3)(0)
-    for(i <- 0 to 8) B(i/3)(i%3) = rnd.nextInt(20000)-10000
+    val B = Array.fill[Int](4, 3, 3)(0)
+    for(t <- 0 to 3)
+        for(i <- 0 to 8) B(t)(i/3)(i%3) = rnd.nextInt(65536)-32768
 
-    val std = Array.tabulate(8, 8) {
-        (i, j) => {
+    val std = Array.tabulate(4, 8, 8) {
+        (t, i, j) => {
             var sum = BigInt(0)
             for(ii <- i to i+2)
                 for(jj <- j to j+2){
                     var a = A(ii)(jj)
-                    var b = B(ii-i)(jj-j)
+                    var b = B(t)(ii-i)(jj-j)
                     sum = sum+a*b
                 }
                     
             sum
         }
     }
-
+    /*
     val _B = Array.fill[Int](6, 3)(0)
     val _Bi = Array.fill[Int](6, 3)(0)
     for(j <- 0 to 2){
@@ -99,24 +100,29 @@ class Calc8x8Tester(dut: Calc8x8) extends PeekPokeTester(dut) {
                 }
             }
         }
-    }
+    }*/
+    for(t <- 0 to 3)
+        for(i <- 0 to 8)
+            poke(dut.io.weight(t).real(i), B(t)(i/3)(i%3))
 
     poke(dut.io.flag, 2)
+    poke(dut.io.mask, 15)
     poke(dut.io.valid_in, true)
     var stop = false
     while(!stop){
         step(1)
-        if(peek(dut.io.valid_out)==1){
+        if(peek(dut.io.valid_out)==15){
             println("[valid: " + peek(dut.io.valid_out).toString + "] Result:")
-            for(j <- 0 to 7){
-                var str = ""
-                for(k <- 0 to 7){
-                    var x = peek(dut.io.output.mat(j*8+k)).toString()
-                    expect(dut.io.output.mat(j*8+k), std(j)(k))
-                    str = str+x+" "
-                } 
-                println(str)
-            }
+            for(t <- 0 to 3)
+                for(j <- 0 to 7){
+                    var str = ""
+                    for(k <- 0 to 7){
+                        var x = peek(dut.io.output(t).mat(j*8+k)).toString()
+                        expect(dut.io.output(t).mat(j*8+k), std(t)(j)(k))
+                        str = str+x+" "
+                    } 
+                    println(str)
+                }
 
             stop = true
         }
@@ -129,7 +135,7 @@ class Calc8x8Tester(dut: Calc8x8) extends PeekPokeTester(dut) {
 class Calc8x8Spec extends FlatSpec with Matchers {
 
   it should "Calc8x8 should pass" in {
-        chisel3.iotesters.Driver(() => new Calc8x8(16)) { c =>
+        chisel3.iotesters.Driver(() => new Calc8x8(16, 4)) { c =>
             new Calc8x8Tester(c)
         } should be (true)
     }

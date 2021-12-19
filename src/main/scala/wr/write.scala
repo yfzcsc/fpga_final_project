@@ -39,25 +39,102 @@ class Writer(val w: Int, val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: 
     io.to_smallbank := 0.U.asTypeOf(io.to_smallbank)
     io.to_banks := 0.U.asTypeOf(io.to_banks)
     
+    for(i <- 0 to 7)
+        for(j <- 0 to 5)
+            io.to_bigbank.data(i*6+j) := io.in_from_quant.mat(i*8+(j+1))
+    for(i <- 0 to 7)
+        io.to_smallbank(0).data(i) := io.in_from_quant.mat(i*8)
+    for(i <- 0 to 7)
+        io.to_smallbank(1).data(i) := io.in_from_quant.mat(i*8+7)
+    io.to_banks := gen.output()
     when(io.flag_job){
         gen.set(io.job)
     }.otherwise{
         when(io.valid_in){
             io.valid_out := true.B
-            for(i <- 0 to 7)
-                for(j <- 0 to 5)
-                    io.to_bigbank.data(i*6+j) := io.in_from_quant.mat(i*8+(j+1))
-            for(i <- 0 to 7)
-                io.to_smallbank(0).data(i) := io.in_from_quant.mat(i*8)
-            for(i <- 0 to 7)
-                io.to_smallbank(1).data(i) := io.in_from_quant.mat(i*8+7)
-            io.to_banks := gen.output()
             gen.go()
         }
     }
 }
 
+class RealWriterBundle(val w: Int, val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int) extends TransBundle{
+    val in_from_quant = Input(new QuantedData(w))
+    val job = Input(new RealWriteJobs(addr_w, h_w, c_w, id_w))
+    val to_bigbank = Output(new BigBankWriteData(w))
+    val to_smallbank = Output(Vec(2, new SmallBankWriteData(w)))
+    val to_banks = Output(new AddressWriteGroup(addr_w, id_w))
+}
 
+class RealWriter(val w: Int, val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int) extends Module{
+    val io = IO(new RealWriterBundle(w, addr_w, h_w, c_w, id_w))
+
+    val gen = RegInit(VecInit(Seq.fill(2)(0.U.asTypeOf(new WriteGroup(addr_w, h_w, c_w, id_w)))))
+    val cnt_ic = RegInit(0.U.asTypeOf(ACounter(c_w)))
+    val state = RegInit(0.U(1.W))
+
+    for(i <- 0 to 7)
+        for(j <- 0 to 5)
+            io.to_bigbank.data(i*6+j) := io.in_from_quant.mat(i*8+(j+1))
+    for(i <- 0 to 7)
+        io.to_smallbank(0).data(i) := io.in_from_quant.mat(i*8)
+    for(i <- 0 to 7)
+        io.to_smallbank(1).data(i) := io.in_from_quant.mat(i*8+7)
+
+    io.to_banks := gen(state).output()
+    io.valid_out := false.B
+    when(io.flag_job){
+        gen(0).set(io.job.job(0))
+        gen(1).set(io.job.job(1))
+        cnt_ic.set(io.job.out_chan)
+        state := 0.U
+    }.otherwise{
+        when(io.valid_in){
+            io.valid_out := true.B
+            gen(state).go()
+            when(cnt_ic.inc()){
+                state := ~state
+            }
+        }
+    }
+
+}
+
+class CacheWriter(val w: Int, val para_num: Int) extends Module{
+    val io = IO(new Bundle{
+        val in_from_accumu = Input(Vec(para_num, new AccumuRawData(w)))
+        val valid_in = Input(UInt(para_num.W))
+        val out = Output(new AccumuRawData(w))
+        val valid_out = Output(Bool())
+    })
+
+    io.out := 0.U.asTypeOf(new AccumuRawData(w))
+    io.valid_out := false.B
+
+
+    val cache_valid = RegInit(0.U(para_num.W))
+    cache_valid := (cache_valid >> 1.U)|io.valid_in
+
+    val state = RegInit(((para_num-1)).U.asTypeOf(ACounter(2.W)))    // the width of para_num
+
+    val cache = RegInit(0.U.asTypeOf(Vec(para_num, new AccumuRawData(w))))
+    
+    for(t <- 0 to para_num-1){
+        when(io.valid_in(t)){
+            cache(t) := io.in_from_accumu(t)
+        }
+    }
+
+    when(cache_valid(0)){
+        state.inc()
+        io.out := cache(state.ccnt)
+        io.valid_out := cache_valid(0)
+    }.elsewhen(state.ccnt.orR){
+        state.ccnt := 0.U
+    }
+
+}
+
+/*
 class CacheWriter(val w: Int, val addr_w: Int, val num: Int, val h_w: Int, val c_w: Int, val id_w: Int) extends Module{
     val io = IO(new Bundle{
         val in_from_quant = Input(Vec(num, new QuantedData(w)))
@@ -103,4 +180,4 @@ class CacheWriter(val w: Int, val addr_w: Int, val num: Int, val h_w: Int, val c
         }
     }
 
-}
+}*/

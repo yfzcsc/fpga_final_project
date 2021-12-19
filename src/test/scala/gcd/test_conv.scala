@@ -18,7 +18,7 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
         val rd_valid_in = Input(Bool())
         val rd_valid_out = Output(Bool())
         val weight_addr = Output(UInt(addr_w.W))
-        val weight_in = Input(new WeightData())
+        val weight_in = Input(Vec(9, SInt(16.W)))
         val wr_addr = Output(new AddressWriteGroup(addr_w, id_w))
         val bias_in = Input(SInt(bias_w.W))
         val bias_addr = Output(UInt(addr_w.W))
@@ -28,37 +28,45 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
         val quanted = Output(new QuantedData(_w))
         val wr_valid_out = Output(Bool())
         val test_valid_out = Output(Bool())
+        val to_bigbank = Output(new BigBankWriteData(_w))
+        val to_smallbank = Output(Vec(2, new SmallBankWriteData(_w)))
     })
+
+
 
 
     val reader1 = Module(new GraphReader(addr_w, h_w, c_w, id_w)).io
     val reader2 = Module(new GraphReader(addr_w, h_w, c_w, id_w)).io
     val read_pack = Module(new PackReadData(_w, h_w, c_w)).io
-    val read_switch = Module(new ReadSwitch(_w)).io
+    val read_switch = Module(new ReadSwitch(_w, 1)).io
     val read_weight = Module(new WeightReader(_w, addr_w)).io
-    val calc8x8 = Module(new Calc8x8(_w)).io
-    val accu = Module(new Accumu(_w, addr_w, bias_w)).io
+    val calc8x8 = Module(new Calc8x8(_w, 1)).io
+    val accu = Module(new Accumu(_w, addr_w, bias_w, 1)).io
     val quant = Module(new Quant(_w)).io
-    //val write_switch = Module(new WriteSwitch(w, num))
-    //val writer = Module(new Writer())
-    //val maxpool = Module(new Maxpool(w))
-
+    val write_switch = Module(new WriteSwitch(_w, 3)).io
+    val writer = Module(new RealWriter(_w, addr_w, h_w, c_w, id_w)).io
+    val maxpool = Module(new Maxpool(_w)).io
     
+    io.rd_addr1 := 0.U.asTypeOf(io.rd_addr1)
+    io.rd_addr2 := 0.U.asTypeOf(io.rd_addr2)
+    io.rd_valid_out := false.B
+    io.weight_addr := 0.U.asTypeOf(io.weight_addr)
+
 
     io.rd_addr1 := reader1.to_banks
     reader1.flag_job := false.B
-    reader1.enable := false.B
+    reader1.valid_in := false.B
     reader1.job := 0.U.asTypeOf(reader1.job)
     reader1.job_type := 0.U.asTypeOf(reader1.job_type)
 
     io.rd_valid_out := reader2.valid_out
     io.rd_addr2 := reader2.to_banks
     reader2.flag_job := false.B
-    reader2.enable := false.B
+    reader2.valid_in := false.B
     reader2.job := 0.U.asTypeOf(reader2.job)
     reader2.job_type := 0.U.asTypeOf(reader2.job_type)
 
-    read_weight.enable := false.B
+    read_weight.valid_in := false.B
     read_weight.addr_end := 0.U
     read_weight.begin_addr := 0.U
     io.weight_addr := read_weight.addr
@@ -77,184 +85,131 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
     read_switch.job := 0.U.asTypeOf(read_switch.job)
     read_switch.valid_in := read_pack.valid_out
     read_switch.from := read_pack.output
-    read_switch.from_weight := io.weight_in
+    read_switch.from_weight(0) := io.weight_in
 
     calc8x8.input := read_switch.to_calc8x8
     calc8x8.flag := 0.U.asTypeOf(calc8x8.flag)
     calc8x8.weight := read_switch.to_weight
     calc8x8.valid_in := read_switch.valid_out_calc8x8
+    calc8x8.mask := 0.U
+    calc8x8.multmap := read_switch.to_multmap
 
+    
     
     accu.in_from_calc8x8 := calc8x8.output
     accu.valid_in := calc8x8.valid_out
     accu.flag_job := false.B
-    accu.csum := 0.U.asTypeOf(new AccumuCounter())
+    accu.csum := 0.U
     accu.bias_begin_addr := 0.U
     accu.bias_end_addr := 0.U
     io.bias_addr := accu.bias_addr
-    accu.bias_in := io.bias_in
+    accu.bias_in(0) := io.bias_in
     accu.is_in_use := false.B
 
 
-    quant.in_from_accumu := accu.result
-    quant.valid_in := accu.valid_out
+    quant.in_from_accumu := accu.result(0)
+    quant.valid_in := accu.valid_out(0)
     quant.flag_job := false.B
     quant.quant_in := 0.U.asTypeOf(quant.quant_in)
+
+   
+    maxpool.from_big := io.rd_big
+    for(t <- 0 to 1){
+        maxpool.from_small(t)(0) := io.rd_small(t)(1)
+        maxpool.from_small(t)(1) := io.rd_small(t)(2)
+    }
+        
+    maxpool.valid_in := read_switch.valid_out_maxp
+
+    //write_switch.valid_in(1) := false.B
+    //write_switch.input(1) := 0.U.asTypeOf(write_switch.input(1))
+
+    write_switch.valid_in(0) := quant.valid_out // conv
+    write_switch.valid_in(1) := maxpool.valid_out // maxpool
+    write_switch.valid_in(2) := read_switch.valid_out_copy // go through
+
+    write_switch.valid_in(1) := false.B
+    write_switch.valid_in(2) := false.B
+
+    write_switch.input(0) := quant.result
+    write_switch.input(1) := maxpool.result
+    write_switch.input(2) := read_switch.to_copy
+
+    writer.in_from_quant := write_switch.output
+    writer.valid_in := write_switch.valid_out
+    writer.flag_job := false.B
+    writer.job := 0.U.asTypeOf(writer.job)
+    io.wr_addr := writer.to_banks
+    io.to_bigbank := writer.to_bigbank
+    io.to_smallbank := writer.to_smallbank
+    io.wr_valid_out := writer.valid_out
+    
+    /*
+    io.wr_addr := 0.U.asTypeOf(io.wr_addr)
+    io.to_bigbank := 0.U.asTypeOf(io.to_bigbank)
+    io.to_smallbank := 0.U.asTypeOf(io.to_smallbank)
+    io.wr_valid_out := false.B
+    io.bias_addr := 0.U*/
+
     
     io.quanted := quant.result
     io.test_valid_out := calc8x8.valid_out
     // io.quanted := read_pack.output
-    io.wr_valid_out := quant.valid_out
 
     io.packed := 0.U.asTypeOf(io.packed)
-    io.packed.mat := calc8x8.output.mat
+    io.packed.mat := calc8x8.output(0).mat
+    /*
+        // w, h, wr_w, wr_h
+        // in out chan
+        // para
+        // big addr
+        // wr big addr
+        // small addr
+        // wr small addr
+    */
+    val paras = GenAllPara(addr_w, h_w, c_w, id_w, 
+        2, 2, 2, 2, 
+        2, 2,          
+        1, 1,            
+        0, 1023, 0,   
+        1020, 1023, 0, 
+        0, 1023, 0,    
+        1020, 1023, 0, 
+        0, 0, 17, 16
+    )
     
-    io.wr_addr := 0.U.asTypeOf(io.wr_addr)
-
     
     val state = RegInit(0.U(3.W))
     switch(state){
         is(0.U){
-            val (begin_addr, max_addr, min_addr) = (0, 1024, 0)
-            val in_chan = 2
-            val out_chan = 2
-            val (h, w) = (2, 2)
-            val (loop_num, loop_h) = (2*out_chan, 1)
-            val begin_loop_num1 = out_chan
-            val begin_loop_num2 = 0
-            val (small_begin_addr, small_max_addr, small_min_addr) = (0, 1024, 0)
-            var bank_id_big1 = 0
-            var bank_id_small1 = Array(4, 1, 2, 3)
-            var bank_id_big2 = 5
-            var bank_id_small2 = Array(9, 6, 7, 8)
-
-            var weight_begin_addr = 0
-            var weight_addr_end = in_chan*out_chan-1
-            
-            var accu_csum = out_chan
-            var accu_bias_begin_addr = 0
-            var accu_bias_end_addr = (out_chan-1)
-
-            var quant_in = 14
-            var quant_out = 16
-            reader1.flag_job := true.B
-            reader1.job_type := ReadType.toConvOrCopy
-            reader1.job := GenConvReadJob.gen(
-                addr_w, h_w, c_w, id_w,
-                loop_num, begin_loop_num1, loop_h,
-                h/2, w, in_chan, 
-                begin_addr, min_addr, max_addr,
-                small_begin_addr, small_min_addr, small_max_addr,
-                bank_id_big1, bank_id_small1
-            )
-
-            reader2.flag_job := true.B
-            reader2.job_type := ReadType.toConvOrCopy
-            reader2.job := GenConvReadJob.gen(
-                addr_w, h_w, c_w, id_w,
-                loop_num, begin_loop_num2, loop_h,
-                h/2, w, in_chan, 
-                begin_addr, min_addr, max_addr,
-                small_begin_addr, small_min_addr, small_max_addr,
-                bank_id_big2, bank_id_small2
-            )
-            
-            read_weight.flag_job := true.B
-            read_weight.begin_addr := weight_begin_addr.U
-            read_weight.addr_end := weight_addr_end.U
-
-            read_pack.flag_job := true.B
-            read_pack.job := GenPackJob.gen(addr_w, h_w, c_w, w-1, h-1, in_chan*out_chan-1)
-
-            read_switch.flag_job := true.B
-            read_switch.job := ReadSwitchType.toConv
+            paras.set_conv_reader1(reader1)
+            paras.set_conv_reader2(reader2)
+            paras.set_read_weight(read_weight)
+            paras.set_conv_read_pack(read_pack)
+            paras.set_conv_accu(accu)
+            paras.set_quant(quant)
+            paras.set_write(writer, 0)
+            paras.set_conv_read_switch(read_switch)
 
             calc8x8.flag := CalcType.calcConv
-
-            accu.flag_job := true.B
-            accu.csum.csum := (accu_csum-1).U
-            accu.csum.fsum := (accu_csum-1).U
-            accu.is_in_use := true.B
-            accu.bias_begin_addr := accu_bias_begin_addr.U
-            accu.bias_end_addr := accu_bias_end_addr.U
-
-            quant.flag_job := true.B
-            quant.quant_in.in_q := quant_in.U
-            quant.quant_in.out_q := quant_out.U
-
+            calc8x8.mask := paras.mask.U
             state := 1.U
-
         }
         is(1.U){
-            reader1.enable := true.B
-            reader2.enable := true.B
-            read_weight.enable := true.B
+            reader1.valid_in := true.B
+            reader2.valid_in := true.B
+            read_weight.valid_in := true.B
             calc8x8.flag := CalcType.calcConv
+            calc8x8.mask := paras.mask.U
         }
     }
 }
 
-object GenTestWeight{
-    def gen(B: Array[Array[Int]]): Array[Int] = {
-        val _B = Array.fill[Int](6, 3)(0)
-        val _Bi = Array.fill[Int](6, 3)(0)
-        for(j <- 0 to 2){
-            _B(0)(j) = B(0)(j)
-            _B(1)(j) = B(0)(j)+B(1)(j)+B(2)(j)
-            _B(2)(j) = B(0)(j)-B(1)(j)+B(2)(j)
-            _B(3)(j) = B(0)(j)-B(2)(j)
-            _B(4)(j) = B(0)(j)-B(2)(j)
-            _B(5)(j) = B(2)(j)
-            _Bi(3)(j) = B(1)(j)
-            _Bi(4)(j) = -B(1)(j)
-        }
-
-        val __B = Array.fill[Int](6, 6)(0)
-        val __Bi = Array.fill[Int](6, 6)(0)
-
-        for(i <- 0 to 5){
-            __B(i)(0) = _B(i)(0)
-            __B(i)(1) = _B(i)(0)+_B(i)(1)+_B(i)(2)
-            __B(i)(2) = _B(i)(0)-_B(i)(1)+_B(i)(2)
-            __B(i)(3) = _B(i)(0)-_B(i)(2)-_Bi(i)(1)
-            __B(i)(4) = _B(i)(0)-_B(i)(2)+_Bi(i)(1)
-            __B(i)(5) = _B(i)(2)
-            __Bi(i)(0) = _Bi(i)(0)
-            __Bi(i)(1) = _Bi(i)(0)+_Bi(i)(1)+_Bi(i)(2)
-            __Bi(i)(2) = _Bi(i)(0)-_Bi(i)(1)+_Bi(i)(2)
-            __Bi(i)(3) = _Bi(i)(0)-_Bi(i)(2)+_B(i)(1)
-            __Bi(i)(4) = _Bi(i)(0)-_Bi(i)(2)-_B(i)(1)
-            __Bi(i)(5) = _Bi(i)(2)
-        }
-        
-        val ret = Array.fill[Int](46)(0)
-        var sz = 0
-        for(i <- 0 to 5){
-            for(j <- 0 to 5){
-                if(i!=3&&i!=4&&j!=3&&j!=4){
-                    ret(sz) = __B(i)(j)
-                    sz = sz+1
-                } 
-            }
-        }
-        for(i <- 0 to 5)
-            for(j <- 0 to 5)
-                if(!(i!=3&&i!=4&&j!=3&&j!=4)&&((i==3)||(i!=4&&j==3))){
-                    ret(sz) = __B(i)(j)+__Bi(i)(j)
-                    sz = sz+1
-                    ret(sz) = __B(i)(j)
-                    sz = sz+1
-                    ret(sz) = __Bi(i)(j)
-                    sz = sz+1
-                }
-        return ret
-    }
-}
 
 class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, num: Int) extends PeekPokeTester(dut){
     
-    var bank_id_big = Array(0, 5)
-    var bank_id_small = Array(Array(4, 1, 2, 3), Array(9, 6, 7, 8))
+    var bank_id_big = Array(0, 1)
+    var bank_id_small = Array(Array(3, 0, 1, 2), Array(7, 4, 5, 6))
     var (w, h) = (2, 2)
     var (in_chan, out_chan) = (2, 2)
     var A = Array.tabulate(8*8*w*h, in_chan){
@@ -278,7 +233,7 @@ class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: I
             }
             
         }
-    var weight_bank = Array.fill[Int](46*in_chan*out_chan)(0)
+    var weight_bank = Array.fill[Int](9*in_chan*out_chan)(0)
     var bias_bank = Array.tabulate(out_chan){
         i => i
     }
@@ -287,9 +242,8 @@ class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: I
             val B = Array.tabulate(3, 3) {
                 (i, j) => i*3+j
             }
-            val w = GenTestWeight.gen(B)
-            for(k <- 0 to 45)
-                weight_bank((i*in_chan+j)*46+k) = w(k)
+            for(k <- 0 to 8)
+                weight_bank((i*in_chan+j)*9+k) = B(k/3)(k%3)
         }
     var read_reg = 0
     var T = 0
@@ -328,13 +282,9 @@ class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: I
             }
             for(j <- 0 to 47)  
                 poke(dut.io.rd_big(1).data(j), big_bank(get_id(2, 0))(get_addr(2, 0)*48+j))
-            for(i <- 0 to 15)
-                poke(dut.io.weight_in.real(i), weight_bank(rd_w*46+i))
-            for(i <- 0 to 9){
-                poke(dut.io.weight_in.comp1(i), weight_bank(rd_w*46+16+i*3))
-                poke(dut.io.weight_in.comp2(i), weight_bank(rd_w*46+16+i*3+1))
-                poke(dut.io.weight_in.comp3(i), weight_bank(rd_w*46+16+i*3+2))
-            }
+            for(i <- 0 to 8)
+                poke(dut.io.weight_in(i), weight_bank(rd_w*9+i))
+            
             var addr_str = ""
 
             for(i <- 0 to 4)
@@ -351,15 +301,21 @@ class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: I
         }
         if(peek(dut.io.wr_valid_out)==1){
             //stop = 1
+            var addr_str = ""
             
-            println("Quanted Result:")
+            for(i <- 0 to 2)
+                addr_str += "("+peek(dut.io.wr_addr.addrs(i).addr)+", "+peek(dut.io.wr_addr.addrs(i).bank_id)+"), "
+            println("wr_addr1: "+addr_str)
+
+            println("Written Result:")
             for(j <- 0 to 7){
-                var str = ""
-                for(k <- 0 to 7){
-                    var x = peek(dut.io.quanted.mat(j*8+k)).toString()
+                var str = peek(dut.io.to_smallbank(0).data(j)).toString()+" "
+                for(k <- 0 to 5){
+                    var x = peek(dut.io.to_bigbank.data(j*6+k)).toString()
                     //expect(result.mat(j*8+k), std(j)(k))
                     str = str+x+" "
                 } 
+                str = str+peek(dut.io.to_smallbank(1).data(j)).toString()+" "
                 println(str)
             }
 

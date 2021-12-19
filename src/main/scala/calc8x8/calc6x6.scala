@@ -24,6 +24,10 @@ class FirstTransOutput(val w: Int) extends Bundle{
     val mat_comp = Vec(24, SInt(w.W))
 }
 
+class CalcWeightData extends Bundle{
+    val real = Vec(16, SInt(16.W))
+}
+
 class WeightData extends Bundle{
     val real = Vec(16, SInt(18.W))
     val comp1 = Vec(10, SInt(18.W))
@@ -36,7 +40,7 @@ class InputData(w: Int) extends Bundle {
 }
 
 class OutputData(val w: Int) extends Bundle {
-    val mat = Vec(16, SInt((w*2+5).W))
+    val mat = Vec(16, SInt((w*2+6).W))
 }
 
 
@@ -46,49 +50,53 @@ object CalcType extends ChiselEnum {
     val calcConv = Value(2.U)
 }
 
-class Calc6x6(val w: Int) extends Module{
+class Calc6x6(val w: Int, val para_num: Int) extends Module{
     val io = IO(new Bundle{
         val input = Input(new InputData(w))
         val flag = Input(CalcType())
-        val weight = Input(new WeightData())
-        val output = Output(new OutputData(w))
+        val weight = Input(Vec(para_num, new WeightData()))
+        val output = Output(Vec(para_num, new OutputData(w)))
         val valid_in = Input(Bool())
         val valid_out = Output(Bool())
     })
     
-    
-    val real = VecInit(Seq.fill(16){Module(new Core()).io})
-    for(i <- 0 to 15){
-        real(i).flag := 0.U.asTypeOf(real(i).flag)
-        real(i).w_a := 0.U.asTypeOf(real(i).w_a)
-        real(i).in_b := 0.U.asTypeOf(real(i).in_b)
-    }
-
-    val comp1 = VecInit(Seq.fill(10){Module(new Core()).io})
-    val comp2 = VecInit(Seq.fill(10){Module(new Core()).io})
-    val comp3 = VecInit(Seq.fill(10){Module(new Core()).io})
-    
-
-    for(i <- 0 to 9){
-        comp1(i).flag := 0.U.asTypeOf(comp1(i).flag)
-        comp1(i).w_a := 0.U.asTypeOf(comp1(i).w_a)
-        comp1(i).in_b := 0.U.asTypeOf(comp1(i).in_b)
-        comp2(i).flag := 0.U.asTypeOf(comp2(i).flag)
-        comp2(i).w_a := 0.U.asTypeOf(comp2(i).w_a)
-        comp2(i).in_b := 0.U.asTypeOf(comp2(i).in_b)
-        comp3(i).flag := 0.U.asTypeOf(comp3(i).flag)
-        comp3(i).w_a := 0.U.asTypeOf(comp3(i).w_a)
-        comp3(i).in_b := 0.U.asTypeOf(comp3(i).in_b)
-    }
     io.output := 0.U.asTypeOf(io.output)
     io.valid_out := false.B
     
+    val real = Array.fill(para_num, 16)(Module(new Core()).io)
+    
+    for(t <- 0 to para_num-1)
+        for(i <- 0 to 15){
+            real(t)(i).flag := 0.U.asTypeOf(real(t)(i).flag)
+            real(t)(i).w_a := 0.U.asTypeOf(real(t)(i).w_a)
+            real(t)(i).in_b := 0.U.asTypeOf(real(t)(i).in_b)
+        }
 
+    val comp1 = Array.fill(para_num, 10)(Module(new Core()).io)
+    val comp2 = Array.fill(para_num, 10)(Module(new Core()).io)
+    val comp3 = Array.fill(para_num, 10)(Module(new Core()).io)
+    
+    for(t <- 0 to para_num-1)
+        for(i <- 0 to 9){
+            comp1(t)(i).flag := 0.U.asTypeOf(comp1(t)(i).flag)
+            comp1(t)(i).w_a := 0.U.asTypeOf(comp1(t)(i).w_a)
+            comp1(t)(i).in_b := 0.U.asTypeOf(comp1(t)(i).in_b)
+            comp2(t)(i).flag := 0.U.asTypeOf(comp2(t)(i).flag)
+            comp2(t)(i).w_a := 0.U.asTypeOf(comp2(t)(i).w_a)
+            comp2(t)(i).in_b := 0.U.asTypeOf(comp2(t)(i).in_b)
+            comp3(t)(i).flag := 0.U.asTypeOf(comp3(t)(i).flag)
+            comp3(t)(i).w_a := 0.U.asTypeOf(comp3(t)(i).w_a)
+            comp3(t)(i).in_b := 0.U.asTypeOf(comp3(t)(i).in_b)
+        }
+    
+    
     val reg1 = RegInit(0.U.asTypeOf(new FirstTransInput(w+2)))
     val reg2 = RegInit(0.U.asTypeOf(new FinalTransInput(w+4)))
-    val w3 = RegInit(0.U.asTypeOf(new TransOutput(w*2+6)))
-    val reg3 = RegInit(0.U.asTypeOf(new FirstTransOutput(w*2+6)))
+    val _w3 = Wire(Vec(para_num, new TransOutput(w*2+6)))
+    val w3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new TransOutput(w*2+6)))))
+    val reg3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new FirstTransOutput(w*2+6)))))
 
+    _w3 := 0.U.asTypeOf(_w3)
     
     
     def g6(x: Int, y: Int): Int = {
@@ -103,25 +111,57 @@ class Calc6x6(val w: Int) extends Module{
 
     def first_trans_input(in: InputData): Unit = {
         for(i <- 0 to 5){
+
+            
+            val w2m4 = Wire(SInt((in.mat(g6(i, 2)).getWidth+1).W))
+            val w2a4 = Wire(SInt((in.mat(g6(i, 2)).getWidth+1).W))
+            val w1a3 = Wire(SInt((in.mat(g6(1, i)).getWidth+1).W))
+
+            w2m4 := -in.mat(g6(2, i))+&in.mat(g6(4, i))
+            w2a4 := in.mat(g6(2, i))+&in.mat(g6(4, i))
+
+            w1a3 := in.mat(g6(1, i))+&in.mat(g6(3, i))
+
             reg1.mat_real(g6(0, i)) := in.mat(g6(0, i))-&in.mat(g6(4, i))
-            reg1.mat_real(g6(1, i)) := in.mat(g6(1, i))+&in.mat(g6(2, i))+&in.mat(g6(3, i))+&in.mat(g6(4, i))
-            reg1.mat_real(g6(2, i)) := -in.mat(g6(1, i))+&in.mat(g6(2, i))-&in.mat(g6(3, i))+&in.mat(g6(4, i))
-            reg1.mat_real(g6(3, i)) := -in.mat(g6(2, i))+&in.mat(g6(4, i))
-            reg1.mat_real(g6(4, i)) := -in.mat(g6(2, i))+&in.mat(g6(4, i))
+            reg1.mat_real(g6(1, i)) := w1a3+&w2a4
+            reg1.mat_real(g6(2, i)) := -w1a3+&w2a4
+            reg1.mat_real(g6(3, i)) := w2m4
+            reg1.mat_real(g6(4, i)) := w2m4
             reg1.mat_real(g6(5, i)) := -in.mat(g6(1, i))+&in.mat(g6(5, i))
 
-            reg1.mat_comp(g6(0, i)) := -in.mat(g6(1, i))+&in.mat(g6(3, i))  // g(3, i, 6)
-            reg1.mat_comp(g6(1, i)) := in.mat(g6(1, i))-&in.mat(g6(3, i))  // g(4, i, 6)
+            val w1m3 = Wire(SInt((in.mat(g6(1, i)).getWidth+1).W))
+            w1m3 := in.mat(g6(1, i))-&in.mat(g6(3, i))
+
+
+            reg1.mat_comp(g6(0, i)) := -w1m3  // g(3, i, 6)
+            reg1.mat_comp(g6(1, i)) := w1m3  // g(4, i, 6)
         }
     }
 
     def final_trans_input(in: FirstTransInput): Unit = {
         for(i <- 0 to 5){
+
+            val w13 = Wire(SInt((in.mat_real(g6(i, 1)).getWidth+1).W))
+            val w24 = Wire(SInt((in.mat_real(g6(i, 2)).getWidth+1).W))
+            val w2m4 = Wire(SInt((in.mat_real(g6(i, 2)).getWidth+1).W))
+
+            w13 := in.mat_real(g6(i, 1))+&in.mat_real(g6(i, 3))
+            w24 := in.mat_real(g6(i, 2))+&in.mat_real(g6(i, 4))
+            w2m4 := -in.mat_real(g6(i, 2))+&in.mat_real(g6(i, 4))
+            if(i>=3&&i<=4){
+                val c13 = Wire(SInt((in.mat_comp(g6(i-3, 3)).getWidth+1).W))
+                c13 := in.mat_comp(g6(i-3, 3))-&in.mat_comp(g6(i-3, 1))
+                reg2.mat_real(g6(i, 3)) := w2m4-&c13
+                reg2.mat_real(g6(i, 4)) := w2m4+&c13
+            } else {
+                reg2.mat_real(g6(i, 3)) := w2m4
+                reg2.mat_real(g6(i, 4)) := w2m4
+            }
+            
+
             reg2.mat_real(g6(i, 0)) := in.mat_real(g6(i, 0))-&in.mat_real(g6(i, 4))
-            reg2.mat_real(g6(i, 1)) := in.mat_real(g6(i, 1))+&in.mat_real(g6(i, 2))+&in.mat_real(g6(i, 3))+&in.mat_real(g6(i, 4))
-            reg2.mat_real(g6(i, 2)) := -in.mat_real(g6(i, 1))+&in.mat_real(g6(i, 2))-&in.mat_real(g6(i, 3))+&in.mat_real(g6(i, 4));
-            reg2.mat_real(g6(i, 3)) := (if (i>=3&&i<=4) -in.mat_real(g6(i, 2))+&in.mat_real(g6(i, 4))-&in.mat_comp(g6(i-3, 3))+&in.mat_comp(g6(i-3, 1)) else -in.mat_real(g6(i, 2))+&in.mat_real(g6(i, 4)));
-            reg2.mat_real(g6(i, 4)) := (if (i>=3&&i<=4) -in.mat_real(g6(i, 2))+&in.mat_real(g6(i, 4))+&in.mat_comp(g6(i-3, 3))-&in.mat_comp(g6(i-3, 1)) else -in.mat_real(g6(i, 2))+&in.mat_real(g6(i, 4)));
+            reg2.mat_real(g6(i, 1)) := w13+&w24
+            reg2.mat_real(g6(i, 2)) := -w13+&w24
             reg2.mat_real(g6(i, 5)) := -in.mat_real(g6(i, 1))+&in.mat_real(g6(i, 5))
         }
         //(3, 0...5)
@@ -139,29 +179,67 @@ class Calc6x6(val w: Int) extends Module{
         reg2.mat_comp(9) := -in.mat_real(g6(5, 1))+&in.mat_real(g6(5, 3))
     }
 
-    def first_trans_output(in: TransOutput): Unit = {
+
+    def first_trans_output(out: FirstTransOutput, in: TransOutput): Unit = {
         for(i <- 0 to 5){
-            reg3.mat_real(g6(0, i)) := in.mat_real(g6(0, i))+((in.mat_real(g6(1, i))+
-                                        in.mat_real(g6(2, i))+in.mat_real(g6(3, i))+in.mat_real(g6(4, i)))>>2.U)
-            reg3.mat_real(g6(1, i)) := (in.mat_real(g6(1, i))-in.mat_real(g6(2, i))-in.mat_comp(g6(3, i))+in.mat_comp(g6(4, i)))>>2.U
-            reg3.mat_real(g6(2, i)) := (in.mat_real(g6(1, i))+in.mat_real(g6(2, i))-in.mat_real(g6(3, i))-in.mat_real(g6(4, i)))>>2.U
-            reg3.mat_real(g6(3, i)) := ((in.mat_real(g6(1, i))-in.mat_real(g6(2, i))+in.mat_comp(g6(3, i))-in.mat_comp(g6(4, i)))>>2.U)+(in.mat_real(g6(5, i)))
             
-            reg3.mat_comp(g6(0, i)) := in.mat_comp(g6(0, i))+((in.mat_comp(g6(1, i))+
-                                        in.mat_comp(g6(2, i))+in.mat_comp(g6(3, i))+in.mat_comp(g6(4, i)))>>2.U)
-            reg3.mat_comp(g6(1, i)) := (in.mat_comp(g6(1, i))-in.mat_comp(g6(2, i))+in.mat_real(g6(3, i))-in.mat_real(g6(4, i)))>>2.U
-            reg3.mat_comp(g6(2, i)) := (in.mat_comp(g6(1, i))+in.mat_comp(g6(2, i))-in.mat_comp(g6(3, i))-in.mat_comp(g6(4, i)))>>2.U
-            reg3.mat_comp(g6(3, i)) := ((in.mat_comp(g6(1, i))-in.mat_comp(g6(2, i))-in.mat_real(g6(3, i))+in.mat_real(g6(4, i)))>>2.U)+(in.mat_comp(g6(5, i)))
+            val w1a2 = Wire(SInt(in.mat_real(g6(1, i)).getWidth.W))
+            val w1m2 = Wire(SInt(in.mat_real(g6(1, i)).getWidth.W))
+
+            w1a2 := in.mat_real(g6(1, i))+in.mat_real(g6(2, i))
+            w1m2 := in.mat_real(g6(1, i))-in.mat_real(g6(2, i))
+
+            val r34 = Wire(SInt(in.mat_real(g6(3, i)).getWidth.W))
+            val c34 = Wire(SInt(in.mat_comp(g6(3, i)).getWidth.W))
+
+            r34 := in.mat_real(g6(3, i))+in.mat_real(g6(4, i))
+            c34 := in.mat_comp(g6(3, i))-in.mat_comp(g6(4, i))
+
+            out.mat_real(g6(0, i)) := in.mat_real(g6(0, i))+((w1a2+r34)>>2.U)
+            out.mat_real(g6(1, i)) := (w1m2-c34)>>2.U
+            out.mat_real(g6(2, i)) := (w1a2-r34)>>2.U
+            out.mat_real(g6(3, i)) := ((w1m2+c34)>>2.U)+(in.mat_real(g6(5, i)))
+            
+            if(i<=4&&i>=3){
+                val _w1a2 = Wire(SInt(in.mat_comp(g6(1, i)).getWidth.W))
+                val _w1m2 = Wire(SInt(in.mat_comp(g6(1, i)).getWidth.W))
+                _w1a2 := in.mat_comp(g6(1, i))+in.mat_comp(g6(2, i))
+                _w1m2 := in.mat_comp(g6(1, i))-in.mat_comp(g6(2, i))
+
+                val _r34 = Wire(SInt(in.mat_real(g6(3, i)).getWidth.W))
+                val _c34 = Wire(SInt(in.mat_comp(g6(3, i)).getWidth.W))
+
+                _r34 := in.mat_real(g6(3, i))-in.mat_real(g6(4, i))
+                _c34 := in.mat_comp(g6(3, i))+in.mat_comp(g6(4, i))
+
+                out.mat_comp(g6(0, i)) := in.mat_comp(g6(0, i))+((_w1a2+_c34)>>2.U)
+                out.mat_comp(g6(1, i)) := (_w1m2+_r34)>>2.U
+                out.mat_comp(g6(2, i)) := (_w1a2-_c34)>>2.U
+                out.mat_comp(g6(3, i)) := ((_w1m2-_r34)>>2.U)+(in.mat_comp(g6(5, i)))
+                
+            }
         }
     }
 
-    def final_trans_output(in: FirstTransOutput): Unit = {
+    def final_trans_output(output: OutputData, in: FirstTransOutput): Unit = {
         for(i <- 0 to 3){
-            io.output.mat(g4(i, 0)) := in.mat_real(g6(i, 0))+((in.mat_real(g6(i, 1))+
-                                        in.mat_real(g6(i, 2))+in.mat_real(g6(i, 3))+in.mat_real(g6(i, 4)))>>2.U)
-            io.output.mat(g4(i, 1)) := ((in.mat_real(g6(i, 1))-in.mat_real(g6(i, 2))-in.mat_comp(g6(i, 3))+in.mat_comp(g6(i, 4)))>>2.U)
-            io.output.mat(g4(i, 2)) := ((in.mat_real(g6(i, 1))+in.mat_real(g6(i, 2))-in.mat_real(g6(i, 3))-in.mat_real(g6(i, 4)))>>2.U)
-            io.output.mat(g4(i, 3)) := ((in.mat_real(g6(i, 1))-in.mat_real(g6(i, 2))+in.mat_comp(g6(i, 3))-in.mat_comp(g6(i, 4)))>>2.U)+(in.mat_real(g6(i, 5)))
+            val w1a2 = Wire(SInt(in.mat_real(g6(i, 1)).getWidth.W))
+            val w1m2 = Wire(SInt(in.mat_real(g6(i, 1)).getWidth.W))
+
+            w1a2 := in.mat_real(g6(i, 1))+in.mat_real(g6(i, 2))
+            w1m2 := in.mat_real(g6(i, 1))-in.mat_real(g6(i, 2))
+
+            
+            val r34 = Wire(SInt(in.mat_real(g6(i, 3)).getWidth.W))
+            val c34 = Wire(SInt(in.mat_comp(g6(i, 3)).getWidth.W))
+
+            r34 := in.mat_real(g6(i, 3))+in.mat_real(g6(i, 4))
+            c34 := in.mat_comp(g6(i, 3))-in.mat_comp(g6(i, 4))
+
+            output.mat(g4(i, 0)) := in.mat_real(g6(i, 0))+((w1a2+r34)>>2.U)
+            output.mat(g4(i, 1)) := ((w1m2-c34)>>2.U)
+            output.mat(g4(i, 2)) := ((w1a2-r34)>>2.U)
+            output.mat(g4(i, 3)) := ((w1m2+c34)>>2.U)+(in.mat_real(g6(i, 5)))
         }
     }
 
@@ -171,16 +249,43 @@ class Calc6x6(val w: Int) extends Module{
     valid_reg(1) := valid_reg(0)
     final_trans_input(reg1)
     valid_reg(2) := valid_reg(1)
-    first_trans_output(w3)
+    for(t <- 0 to para_num-1)
+        first_trans_output(reg3(t), w3(t))
     valid_reg(3) := valid_reg(2)
     io.valid_out := valid_reg(3)
+    
+    for(t <- 0 to para_num-1){
+        for(i <- 0 to 5){
+            for(j <- 0 to 5){
+                if(i!=3&&i!=4&&j!=3&&j!=4){
+                    w3(t).mat_real(g6(i, j)) := _w3(t).mat_real(g6(i, j))
+                } else if(i==3){
+                    w3(t).mat_real(g6(i, j)) := _w3(t).mat_real(g6(i, j))
+                    w3(t).mat_comp(g6(i, j)) := _w3(t).mat_comp(g6(i, j))
+                } else if(i==4){
+                    val real_j = if(j>=3&&j<=4) 7-j else j
+
+                    w3(t).mat_real(g6(i, j)) := _w3(t).mat_real(g6(3, real_j))
+                    w3(t).mat_comp(g6(i, j)) := -_w3(t).mat_comp(g6(3, real_j))
+
+                } else if(j==3){
+                    w3(t).mat_real(g6(i, j)) := _w3(t).mat_real(g6(i, j))
+                    w3(t).mat_comp(g6(i, j)) := _w3(t).mat_comp(g6(i, j))
+                } else if(j==4){
+                    
+                    w3(t).mat_real(g6(i, j)) := _w3(t).mat_real(g6(i, 3))
+                    w3(t).mat_comp(g6(i, j)) := -_w3(t).mat_comp(g6(i, 3))
+                }
+            }
+        }
+    }
     switch(io.flag){
         // in 0 cycle
         is(CalcType.leakyReLU){
             for(i <- 0 to 15){
-                real(i).flag := CoreType.leakyReLU
-                real(i).in_b := io.input.mat(i)
-                io.output.mat(i) := real(i).result
+                real(0)(i).flag := CoreType.leakyReLU
+                real(0)(i).in_b := io.input.mat(i)
+                io.output(0).mat(i) := real(0)(i).result
             }
             io.valid_out := io.valid_in
         }
@@ -188,10 +293,10 @@ class Calc6x6(val w: Int) extends Module{
         // in 0 cycle
         is(CalcType.calcMult){
             for(i <- 0 to 15){
-                real(i).flag := CoreType.calcMult
-                real(i).in_b := io.input.mat(i)
-                real(i).w_a := io.weight.real(i)
-                io.output.mat(i) := real(i).result
+                real(0)(i).flag := CoreType.calcMult
+                real(0)(i).in_b := io.input.mat(i)
+                real(0)(i).w_a := io.weight(0).real(i)
+                io.output(0).mat(i) := real(0)(i).result
             }
          
            io.valid_out := io.valid_in
@@ -199,73 +304,55 @@ class Calc6x6(val w: Int) extends Module{
         
         // in 3 cycle
         is(CalcType.calcConv){
-            /*
-            first_trans_input(io.input)
-            final_trans_input(reg1)
-            first_trans_output(w3)
-            final_trans_output(reg3)
-            //for(i <- 0 to 3)
-               // for(j <- 0 to 3)
-                //    io.output.mat(i*4+j) := reg3.mat_real((i)*6+(j+2))
-                  // io.output.mat(i*4+j) := io.input.mat(i*6+j)
-            */
-            final_trans_output(reg3)
+            for(t <- 0 to para_num-1)
+                final_trans_output(io.output(t), reg3(t))
+			
             
-            var x = 0
-            var y = 0
-            val A = new Array[Int](40)
-            for(i <- 0 to 5){
-                for(j <- 0 to 5){
-                    if(i!=3&&i!=4&&j!=3&&j!=4){
-                        real(x).flag := CoreType.calcMult
-                        real(x).in_b := reg2.mat_real(g6(i, j))
-                        real(x).w_a := io.weight.real(x)
-                        w3.mat_real(g6(i, j)) := real(x).result
-                        x = x+1
-                    } else if(i==3){
-                        comp1(y).flag := CoreType.calcMult
-                        comp2(y).flag := CoreType.calcMult
-                        comp3(y).flag := CoreType.calcMult
+            for(t <- 0 to para_num-1){
+                var x = 0
+                var y = 0
+                for(i <- 0 to 5){
+                    for(j <- 0 to 5){
+                        if(i!=3&&i!=4&&j!=3&&j!=4){
+                            real(t)(x).flag := CoreType.calcMult
+                            real(t)(x).in_b := reg2.mat_real(g6(i, j))
+                            real(t)(x).w_a := io.weight(t).real(x)
+                            _w3(t).mat_real(g6(i, j)) := real(t)(x).result
+                            x = x+1
+                        } else if(i==3){
+                            comp1(t)(y).flag := CoreType.calcMult
+                            comp2(t)(y).flag := CoreType.calcMult
+                            comp3(t)(y).flag := CoreType.calcMult
 
-                        comp1(y).w_a := io.weight.comp1(y)
-                        comp2(y).w_a := io.weight.comp2(y)
-                        comp3(y).w_a := io.weight.comp3(y)
+                            comp1(t)(y).w_a := io.weight(t).comp1(y)
+                            comp2(t)(y).w_a := io.weight(t).comp2(y)
+                            comp3(t)(y).w_a := io.weight(t).comp3(y)
 
-                        comp1(y).in_b := reg2.mat_real(g6(i, j))+reg2.mat_comp(j)
-                        comp2(y).in_b := reg2.mat_real(g6(i, j))
-                        comp3(y).in_b := reg2.mat_comp(j)
-                        w3.mat_real(g6(i, j)) := comp2(y).result-comp3(y).result
-                        w3.mat_comp(g6(i, j)) := comp1(y).result-comp2(y).result-comp3(y).result
-                        A(g6(i, j)) = y
-                        y = y+1
-                    } else if(i==4){
-                        val real_j = if(j>=3&&j<=4) 7-j else j
-                        val real_y = A(g6(3, real_j))
+                            comp1(t)(y).in_b := reg2.mat_real(g6(i, j))+reg2.mat_comp(j)
+                            comp2(t)(y).in_b := reg2.mat_real(g6(i, j))
+                            comp3(t)(y).in_b := reg2.mat_comp(j)
+                            _w3(t).mat_real(g6(i, j)) := comp2(t)(y).result-&comp3(t)(y).result
+                            _w3(t).mat_comp(g6(i, j)) := comp1(t)(y).result-&comp2(t)(y).result-&comp3(t)(y).result
+                            
+                            y = y+1
+                        } else if(i!=4&&j==3){
+                            val real_i = if(i>=5) 9 else i+6
+                            comp1(t)(y).flag := CoreType.calcMult
+                            comp2(t)(y).flag := CoreType.calcMult
+                            comp3(t)(y).flag := CoreType.calcMult
+                            
+                            comp1(t)(y).w_a := io.weight(t).comp1(y)
+                            comp2(t)(y).w_a := io.weight(t).comp2(y)
+                            comp3(t)(y).w_a := io.weight(t).comp3(y)
 
-                        w3.mat_real(g6(i, j)) := comp2(real_y).result-comp3(real_y).result
-                        w3.mat_comp(g6(i, j)) := -comp1(real_y).result+comp2(real_y).result+comp3(real_y).result
-                    } else if(j==3){
-                        val real_i = if(i>=5) 9 else i+6
-                        comp1(y).flag := CoreType.calcMult
-                        comp2(y).flag := CoreType.calcMult
-                        comp3(y).flag := CoreType.calcMult
-                        
-                        comp1(y).w_a := io.weight.comp1(y)
-                        comp2(y).w_a := io.weight.comp2(y)
-                        comp3(y).w_a := io.weight.comp3(y)
-
-                        comp1(y).in_b := reg2.mat_real(g6(i, j))+reg2.mat_comp(real_i)
-                        comp2(y).in_b := reg2.mat_real(g6(i, j))
-                        comp3(y).in_b := reg2.mat_comp(real_i)
-                        w3.mat_real(g6(i, j)) := comp2(y).result-comp3(y).result
-                        w3.mat_comp(g6(i, j)) := comp1(y).result-comp2(y).result-comp3(y).result
-                        A(g6(i, j)) = y
-                        y = y+1
-                    } else if(j==4){
-                        val real_y = A(g6(i, 3))
-
-                        w3.mat_real(g6(i, j)) := comp2(real_y).result-comp3(real_y).result
-                        w3.mat_comp(g6(i, j)) := -comp1(real_y).result+comp2(real_y).result+comp3(real_y).result
+                            comp1(t)(y).in_b := reg2.mat_real(g6(i, j))+reg2.mat_comp(real_i)
+                            comp2(t)(y).in_b := reg2.mat_real(g6(i, j))
+                            comp3(t)(y).in_b := reg2.mat_comp(real_i)
+                            _w3(t).mat_real(g6(i, j)) := comp2(t)(y).result-&comp3(t)(y).result
+                            _w3(t).mat_comp(g6(i, j)) := comp1(t)(y).result-&comp2(t)(y).result-&comp3(t)(y).result
+                            
+                            y = y+1
+                        }
                     }
                 }
             }
