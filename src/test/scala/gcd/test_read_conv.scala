@@ -57,7 +57,7 @@ class ReadConvTester(dut: ReadConvTestModule, std: Array[Array[Tuple2[Int, Int]]
     step(1)
     poke(dut.io.start, false.B)
     step(1)
-    for(i <- 0 to 3000){
+    for(i <- 0 to 10000){
         var str = ""
         str = str+"["+peek(dut.io.valid_out)+"]"
         for(j <- 0 to 4){
@@ -78,16 +78,16 @@ class ReadConvSpec extends FlatSpec with Matchers {
 
 
     it should "ReadConv should pass" in {
-        var (h, w) = (8, 8)
-        var in_chan = 8
+        var (h, w) = (4, 4)
+        var in_chan = 16
         var (begin_addr, max_addr, min_addr) = (990, 1010, 12)
         var (small_begin_addr, small_max_addr, small_min_addr) = (540, 600, 29)
         var bank_id_big = 0
         var bank_id_small = Array(4, 1, 2, 3)
-        var loop_num = 2
-        var loop_h = 2
+        var loop_num = 32
+        var loop_h = 1
 
-        var std = Array.tabulate(10000, 5){
+        var std = Array.tabulate(100000, 5){
             (i, j) => (0, 0)
         }
 
@@ -125,7 +125,7 @@ class ReadConvSpec extends FlatSpec with Matchers {
                         }
 
 
-        chisel3.iotesters.Driver(() => new ReadConvTestModule(10, 10, 6, 4, loop_num, loop_h, 
+        chisel3.iotesters.Driver(() => new ReadConvTestModule(10, 16, 10, 4, loop_num, loop_h, 
             h, w, in_chan, begin_addr, max_addr, min_addr, small_begin_addr, small_min_addr, small_max_addr,
             bank_id_big, bank_id_small
         )) { c =>
