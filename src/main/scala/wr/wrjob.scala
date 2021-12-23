@@ -103,6 +103,39 @@ object GenConvReadJob{
     }
 }
 
+object GenMaxpReadJob{
+    def gen(addr_w: Int, h_w: Int, c_w: Int, id_w: Int, loop_num: Int, begin_loop_num: Int, loop_h: Int, 
+            h: Int, w: Int, in_chan: Int, begin_addr: Int, min_addr: Int, max_addr: Int,
+            small_begin_addr: Int, small_min_addr: Int, small_max_addr: Int, 
+            bank_id_big: Int, bank_id_small: Array[Int]): ReadJobs = {
+        val ret = Wire(new ReadJobs(addr_w, h_w, c_w, id_w))
+        ret := 0.U.asTypeOf(new ReadJobs(addr_w, h_w, c_w, id_w))
+        ret.big.begin_addr := begin_addr.U
+        ret.big.min_addr := min_addr.U
+        ret.big.max_addr := max_addr.U
+        ret.big.bank_id := bank_id_big.U
+        ret.big.block_size := in_chan.U
+        ret.big.column_size := (in_chan*h).U
+        ret.big.cnt_x_end := (w/2-1).U
+        ret.big.cnt_y_end := (h-1).U
+        ret.big.cnt_ic_end := (in_chan-1).U
+        for(i <- 0 to 1){
+            ret.small(i).begin_addr := small_begin_addr.U
+            ret.small(i).min_addr := small_min_addr.U
+            ret.small(i).max_addr := small_max_addr.U
+            if(i==0){
+                ret.small(i).bank_id := bank_id_small(2).U
+                ret.small(i).ano_bank_id := bank_id_small(0).U   
+            } else {
+                ret.small(i).bank_id := bank_id_small(i).U
+                ret.small(i).ano_bank_id := bank_id_small(i^2).U    
+            }
+            
+        }
+        return ret
+    }
+}
+
 
 object GenWriteConvJob{
     def gen(addr_w: Int, h_w: Int, c_w: Int, id_w: Int, 

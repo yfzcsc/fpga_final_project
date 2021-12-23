@@ -40,7 +40,7 @@ class Maxpool(val w: Int) extends Module{
                     }
                 }
                 a2 := Mux(w4(0)<w4(1), w4(1), w4(0))
-                b2 := Mux(w4(2)<w4(3), w4(2), w4(3))
+                b2 := Mux(w4(2)<w4(3), w4(3), w4(2))
                 cache((ii+t*4)*4+jj) := Mux(a2<b2, b2, a2)
             }
         }

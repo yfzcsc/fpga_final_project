@@ -45,8 +45,8 @@ abstract class GenAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bu
     val column_size = UInt(addr_w.W)
     def clamp(addr: UInt): UInt = {
         val nxt = Wire(UInt(addr_w.W))
-        when(addr>=max_addr){
-            nxt := addr-max_addr+min_addr
+        when(addr>max_addr){
+            nxt := addr-max_addr-1.U+min_addr
         }.otherwise{
             nxt := addr
         }
@@ -71,7 +71,7 @@ abstract class GenAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bu
 class GenReadBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends GenAddress(addr_w, h_w, c_w, id_w){
     val cnt_loop = ACounter(h_w.W)
     val cnt_ups = ACounter(1.W)
-    val cnt_maxp = ACounter(2.W)
+    val cnt_maxp = ACounter(1.W)
     val y_begin_addr = UInt(addr_w.W)
     val ic_begin_addr = UInt(addr_w.W)
     val flag_end = Bool() 
@@ -115,24 +115,14 @@ class GenReadBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends 
                         nxt_addr := now_addr+1.U
                     }
                 }.otherwise{
-                    nxt_addr := y_begin_addr+block_size+1.U
+                    nxt_addr := y_begin_addr+1.U
                 }
             }.otherwise{
                 nxt_addr := y_begin_addr+1.U
             }
             y_begin_addr := clamp(nxt_addr)
         }.otherwise{
-            switch(cnt_maxp.ccnt){
-                is(0.U){
-                    nxt_addr := y_begin_addr+block_size
-                }
-                is(1.U){
-                    nxt_addr := y_begin_addr+column_size
-                }
-                is(2.U){
-                    nxt_addr := y_begin_addr+column_size+block_size
-                }
-            }
+            nxt_addr := y_begin_addr+column_size
         }
         now_addr := clamp(nxt_addr)
     }
@@ -144,7 +134,7 @@ class GenReadBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends 
         flag_end := false.B
         cnt_loop.set(x.begin_loop, x.cnt_loop_end)
         cnt_ups.set(x.cnt_ups_end)
-        cnt_maxp.set(3.U)
+        cnt_maxp.set(1.U)
         y_begin_addr := x.begin_addr
         ic_begin_addr := x.begin_addr
     }
@@ -153,7 +143,7 @@ class GenReadBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends 
 class GenReadSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends GenAddress(addr_w, h_w, c_w, id_w){
     val ano_bank_id = UInt(id_w.W) 
     val cnt_invalid = ACounter(h_w.W)
-    val cnt_maxp = ACounter(2.W)
+    val cnt_maxp = ACounter(1.W)
     val cnt_ups = ACounter(1.W)
     val cnt_loop = ACounter(h_w.W)
     val cnt_swap = ACounter(1.W)
@@ -197,32 +187,10 @@ class GenReadSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extend
         val nxt_addr = Wire(UInt(addr_w.W))
         nxt_addr := 0.U
         when(cnt_maxp.inc()){
-            when(cnt_ic.inc()){
-                nxt_addr := now_addr+1.U
-                bank_id := ano_bank_id
-                ano_bank_id := bank_id
-            }.otherwise{
-                nxt_addr := y_begin_addr+1.U
-                bank_id := ano_bank_id
-                ano_bank_id := bank_id
-            }
-            y_begin_addr := clamp(nxt_addr)
-        }.otherwise{
-            switch(cnt_maxp.ccnt){
-                is(0.U){
-                    nxt_addr := y_begin_addr+block_size
-                }
-                is(1.U){
-                    nxt_addr := y_begin_addr
-                    bank_id := ano_bank_id
-                    ano_bank_id := bank_id
-                }
-                is(2.U){
-                    nxt_addr := y_begin_addr+block_size
-                }
-            }
+            now_addr := clamp(now_addr+1.U)
         }
-        now_addr := clamp(nxt_addr)
+        bank_id := ano_bank_id
+        ano_bank_id := bank_id
     }
     def set(x: ReadSmallJob): Unit = {
         super.set(x)
@@ -230,7 +198,7 @@ class GenReadSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extend
         cnt_loop.set(x.begin_loop, x.cnt_loop_end)
         cnt_invalid.set(x.cnt_invalid_end)
         cnt_ups.set(x.cnt_ups_end)
-        cnt_maxp.set(3.U)
+        cnt_maxp.set(1.U)
         cnt_swap.set(x.begin_swap, 1.U)
         start := false.B
         y_begin_addr := x.begin_addr

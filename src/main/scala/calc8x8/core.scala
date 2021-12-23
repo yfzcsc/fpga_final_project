@@ -19,20 +19,21 @@ class Core extends Module{
     })
     
     val dsp48 = Module(new DSP48())
-    dsp48.io.in_b := io.in_b
-    dsp48.io.in_a := 0.S
-    io.result := dsp48.io.out
+    dsp48.io.in_b := RegNext(io.in_b, 0.S)
+    val r_in_a = RegInit(0.S(18.W))
+    dsp48.io.in_a := r_in_a
+    io.result := RegNext(dsp48.io.out, 0.S)
     
     switch(io.flag){
         is(CoreType.leakyReLU){
             when(io.in_b(io.in_b.getWidth-1)){
-                dsp48.io.in_a := 32767.S
+                r_in_a := 6554.S
             }.otherwise{
-                dsp48.io.in_a := 6554.S
+                r_in_a := 32768.S
             }
         }
         is(CoreType.calcMult){
-            dsp48.io.in_a := io.w_a
+            r_in_a := io.w_a
         }
     }
 }
@@ -57,4 +58,25 @@ class DSP48 extends Module{
     M.B := io.in_a
     io.out := M.P*/
     io.out := io.in_a*io.in_b
+}
+
+
+class ComplexCore extends Module{
+    val io = IO(new Bundle{
+        val sbx = Input(SInt(18.W))
+        val rbx = Input(Bool())
+        val bx = Input(SInt(18.W))
+        val by = Input(SInt(18.W))
+        val ax = Input(SInt(20.W))
+        val ay = Input(SInt(20.W))
+        val x = Output(SInt(40.W))
+        val y = Output(SInt(40.W))
+    })
+    val _ax = RegNext(io.ax, 0.S(20.W))
+    val _ay = RegNext(io.ay, 0.S(20.W))
+    val _bx = RegNext(io.bx, 0.S(18.W))
+    val _by = RegNext(io.by, 0.S(18.W))
+    val w = RegNext((io.ay<<(1.U))*io.sbx+&Mux(io.rbx, io.ay, 0.S), 0.S)
+    io.x := RegNext((_ax+&_ay)*_bx-&w, 0.S)
+    io.y := RegNext((_ax-&_ay)*_by+&w, 0.S)
 }

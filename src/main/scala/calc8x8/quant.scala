@@ -8,8 +8,8 @@ class QuantedData(val w: Int) extends Bundle{
 }
 
 class QuantJob(val w: Int) extends Bundle{
-    val in_q = UInt(5.W)
-    val out_q = UInt(5.W)
+    val in_q = UInt(6.W)
+    val out_q = UInt(6.W)
 }
 
 class QuantBundle(val w: Int) extends TransBundle{

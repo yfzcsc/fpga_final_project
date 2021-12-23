@@ -36,3 +36,30 @@ object ACounter{
     def apply(w: Int) = new ACounter(w.W)
     def apply(w: chisel3.internal.firrtl.Width) = new ACounter(w)
 }
+
+class RCounter(val w: chisel3.internal.firrtl.Width) extends Bundle{
+    val ccnt = UInt(w)
+    val cr = UInt(w)
+    val cl = UInt(w)
+    def inc(): Bool = {
+        val nxt = Wire(Bool())
+        nxt := ccnt===cr
+        ccnt := Mux(nxt, cl, ccnt+1.U)
+        return nxt
+    }
+    def set(r: UInt): Unit = {
+        cr := r
+        cl := 0.U
+        ccnt := 0.U
+    }
+    def set(l: UInt, r: UInt): Unit = {
+        cr := r
+        cl := l
+        ccnt := l
+    }
+}
+
+object RCounter{
+    def apply(w: Int) = new RCounter(w.W)
+    def apply(w: chisel3.internal.firrtl.Width) = new RCounter(w)
+}

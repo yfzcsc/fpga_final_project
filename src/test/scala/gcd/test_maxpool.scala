@@ -9,7 +9,7 @@ import org.scalatest._
 import chisel3.experimental.BundleLiterals._
 import chisel3.iotesters._
 
-class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, num: Int) extends Module{
+class Global2(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, num: Int) extends Module{
     val io = IO(new Bundle{
         val rd_addr1 = Output(new AddressReadGroup(addr_w, id_w))
         val rd_addr2 = Output(new AddressReadGroup(addr_w, id_w))
@@ -115,8 +115,8 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
    
     maxpool.from_big := io.rd_big
     for(t <- 0 to 1){
-        maxpool.from_small(t)(0) := io.rd_small(t)(1)
-        maxpool.from_small(t)(1) := io.rd_small(t)(2)
+        maxpool.from_small(t)(0) := io.rd_small(t)(0)
+        maxpool.from_small(t)(1) := io.rd_small(t)(1)
     }
         
     maxpool.valid_in := read_switch.valid_out_maxp
@@ -127,9 +127,6 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
     write_switch.valid_in(0) := quant.valid_out // conv
     write_switch.valid_in(1) := maxpool.valid_out // maxpool
     write_switch.valid_in(2) := read_switch.valid_out_copy // go through
-
-    write_switch.valid_in(1) := false.B
-    write_switch.valid_in(2) := false.B
 
     write_switch.input(0) := quant.result
     write_switch.input(1) := maxpool.result
@@ -182,31 +179,23 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
     val state = RegInit(0.U(3.W))
     switch(state){
         is(0.U){
-            paras.set_conv_reader1(reader1)
-            paras.set_conv_reader2(reader2)
-            paras.set_read_weight(read_weight)
-            paras.set_conv_read_pack(read_pack)
-            paras.set_conv_accu(accu)
-            paras.set_quant(quant)
+            paras.set_maxp_reader1(reader1)
+            paras.set_maxp_reader2(reader2)
             paras.set_write(writer)
-            paras.set_conv_read_switch(read_switch)
+            paras.set_maxpool_switch(read_switch)
 
-            calc8x8.flag := CalcType.calcConv
-            calc8x8.mask := paras.mask.U
             state := 1.U
         }
         is(1.U){
             reader1.valid_in := true.B
             reader2.valid_in := true.B
-            read_weight.valid_in := true.B
-            calc8x8.flag := CalcType.calcConv
-            calc8x8.mask := paras.mask.U
+
         }
     }
 }
 
 
-class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, num: Int) extends PeekPokeTester(dut){
+class MaxpoolTester(dut: Global2, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, num: Int) extends PeekPokeTester(dut){
     
     var bank_id_big = Array(0, 1)
     var bank_id_small = Array(Array(3, 0, 1, 2), Array(7, 4, 5, 6))
@@ -248,6 +237,19 @@ class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: I
     var read_reg = 0
     var T = 0
     var stop = 0
+
+    val std = Array.tabulate(8, 8, 2){
+        (i, j, t) => {
+            var mx = 0
+            for(x <- i*2 to i*2+1)
+                for(y <- j*2 to j*2+1)
+                    if(mx < A(((y/8)*h+(x/8))*64+(x%8)*8+(y%8))(t))
+                        mx = A(((y/8)*h+(x/8))*64+(x%8)*8+(y%8))(t)
+            mx
+        }
+    }
+
+    var tt = 0
     while(T<20&&(stop==0)){
         T += 1
         val rd_bias = peek(dut.io.bias_addr).toInt
@@ -310,45 +312,18 @@ class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: I
             println("Written Result:")
             for(j <- 0 to 7){
                 var str = peek(dut.io.to_smallbank(0).data(j)).toString()+" "
+                expect(dut.io.to_smallbank(0).data(j), std(j)(0)(tt))
                 for(k <- 0 to 5){
                     var x = peek(dut.io.to_bigbank.data(j*6+k)).toString()
-                    //expect(result.mat(j*8+k), std(j)(k))
+                    expect(dut.io.to_bigbank.data(j*6+k), std(j)(k+1)(tt))
                     str = str+x+" "
                 } 
                 str = str+peek(dut.io.to_smallbank(1).data(j)).toString()+" "
+                expect(dut.io.to_smallbank(1).data(j), std(j)(7)(tt))
                 println(str)
             }
 
-        }
-        if(peek(dut.io.test_valid_out)==1){
-            println("Switch Result:")
-            for(j <- 0 to 9){
-                var str = ""
-                if(j==0){            
-                    for(k <- 0 to 9){
-                        var x = peek(dut.io.packed.up(k)).toString()
-                        //expect(result.mat(j*8+k), std(j)(k))
-                        str = str+x+" "
-                    }
-                } else if(j>=1&&j<=8) {
-                    str = str+peek(dut.io.packed.left(j-1)).toString()+" "
-                    for(k <- 0 to 7){
-                        var x = peek(dut.io.packed.mat((j-1)*8+k)).toString()
-                        //expect(result.mat(j*8+k), std(j)(k))
-                        str = str+x+" "
-                    } 
-                    str = str+peek(dut.io.packed.right(j-1)).toString()+" "
-                } else {
-                    for(k <- 0 to 9){
-                        var x = peek(dut.io.packed.down(k)).toString()
-                        //expect(result.mat(j*8+k), std(j)(k))
-                        str = str+x+" "
-                    }
-                }
-                
-                println(str)
-            }
-
+            tt = tt+1
         }
         step(1)
     }
@@ -356,8 +331,8 @@ class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: I
 
 
 
-class ConvSpec extends FlatSpec with Matchers {
-    it should "Conv should pass" in {
+class MaxpoolSpec extends FlatSpec with Matchers {
+    it should "Maxpool should pass" in {
         val w = 16
         val h_w = 16
         val c_w = 16
@@ -365,8 +340,8 @@ class ConvSpec extends FlatSpec with Matchers {
         val addr_w = 16
         val bias_w = 36
         val num = 1
-        chisel3.iotesters.Driver(() => new Global1(w, h_w, c_w, id_w, addr_w, bias_w, num)) { c =>
-            new ConvTester(c, w, h_w, c_w, id_w, addr_w, bias_w, num)
+        chisel3.iotesters.Driver(() => new Global2(w, h_w, c_w, id_w, addr_w, bias_w, num)) { c =>
+            new MaxpoolTester(c, w, h_w, c_w, id_w, addr_w, bias_w, num)
         } should be (true)
     }
 }

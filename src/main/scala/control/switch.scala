@@ -42,7 +42,7 @@ class ReadSwitch(val w: Int, val para_num: Int) extends Module{
     io.to_copy := 0.U.asTypeOf(io.to_copy)
     io.to_multmap := 0.U.asTypeOf(io.to_multmap)
     
-    io.to_calc8x8 :=io.from
+    io.to_calc8x8 := io.from
     io.to_copy.mat := io.from.mat
     when(io.flag_job){
         job_type := io.job

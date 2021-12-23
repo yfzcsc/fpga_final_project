@@ -12,7 +12,7 @@ class WeightReaderBundle(val w: Int, val addr_w: Int) extends TransBundle{
 class WeightReader(val w: Int, val addr_w: Int) extends Module{
     val io = IO(new WeightReaderBundle(w, addr_w))
 
-    val now_addr = RegInit(0.U.asTypeOf(ACounter(addr_w)))
+    val now_addr = RegInit(0.U.asTypeOf(RCounter(addr_w)))
     io.addr := now_addr.ccnt
     io.valid_out := false.B
     when(io.flag_job){

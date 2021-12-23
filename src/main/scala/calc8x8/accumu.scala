@@ -28,56 +28,60 @@ class Accumu(w: Int, addr_w: Int, bias_w: Int, para_num: Int) extends Module{
     val io = IO(new AccumuBundle(w, addr_w, bias_w, para_num))
 
     val counter = RegInit(0.U.asTypeOf(ACounter(addr_w)))
-    val output = RegInit(0.U.asTypeOf(Vec(para_num, new AccumuRawData(w))))
-    val now_addr = RegInit(0.U.asTypeOf(ACounter(addr_w)))
+    val now_addr = RegInit(0.U.asTypeOf(RCounter(addr_w)))
     val enable = RegInit(false.B)
+    val valid_out_reg = RegInit(0.U(para_num.W))
 
     io.result := 0.U.asTypeOf(Vec(para_num, new AccumuRawData(w)))
-    io.valid_out := false.B
+    io.valid_out := 0.U
     io.bias_addr := now_addr.ccnt
 
     val b64 = Wire(Vec(para_num, new AccumuRawData(w)))
-    val r64 = Wire(Vec(para_num, new AccumuRawData(w)))
-
+    val r64 = RegInit(0.U.asTypeOf(Vec(para_num, new AccumuRawData(w))))
     when(counter.ccnt===counter.cend){
         for(t <- 0 to para_num-1)
             for(i <- 0 to 63){
                 b64(t).mat(i) := io.bias_in(t)
             }
     }.otherwise{
-        b64 := output
+        b64 := r64
     }
-    for(t <- 0 to para_num-1)
-        for(i <- 0 to 63){
-            r64(t).mat(i) := io.in_from_calc8x8(t).mat(i)+b64(t).mat(i)
-        }
-
-    output := r64
-    io.result := r64
     
+    io.result := r64
     when(io.flag_job){
         counter.set(io.csum, io.csum)
-        output := 0.S.asTypeOf(output)
         now_addr.set(io.bias_begin_addr, io.bias_end_addr)
+        r64 := 0.U.asTypeOf(r64)
         enable := io.is_in_use
+        valid_out_reg := 0.U
     }.elsewhen(enable){
+        
+        io.valid_out := valid_out_reg
         when(io.valid_in.orR){
+            for(t <- 0 to para_num-1)
+                for(i <- 0 to 63){
+                    r64(t).mat(i) := io.in_from_calc8x8(t).mat(i)+b64(t).mat(i)
+                }
+            
             when(counter.ccnt===counter.cend){
-                io.valid_out := 0.U
+                valid_out_reg := 0.U
                 counter.ccnt := counter.ccnt-1.U
             }.elsewhen(counter.ccnt===0.U){
-                io.valid_out := io.valid_in
+                valid_out_reg := io.valid_in
                 counter.ccnt := counter.cend
             }.otherwise{
-                io.valid_out := 0.U
+                valid_out_reg := 0.U
                 counter.ccnt := counter.ccnt-1.U
             }
             when(counter.ccnt===1.U){
                 now_addr.inc()
             }
+        }.otherwise{        
+            valid_out_reg := 0.U
         }
-        
-        
+    }.otherwise{
+        io.result(0) := io.in_from_calc8x8(0)
+        io.valid_out := io.valid_in
     }
 
 }

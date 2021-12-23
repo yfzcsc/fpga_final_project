@@ -81,20 +81,19 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
 
     for(t <- 0 to para_num-1)
         for(j <- 0 to 2){
-            val w0m2 = Wire(SInt((B(t)(0)(j).getWidth+1).W))
-            val w0a2 = Wire(SInt((B(t)(0)(j).getWidth+1).W))
+            val w0m2 = RegNext(B(t)(0)(j)-&B(t)(2)(j), 0.S)
+            val w0a2 = RegNext(B(t)(0)(j)+&B(t)(2)(j), 0.S)
 
-            w0m2 := B(t)(0)(j)-&B(t)(2)(j)
-            w0a2 := B(t)(0)(j)+&B(t)(2)(j)
+            val b_t_1_j = RegNext(B(t)(1)(j), 0.S)
 
-            _B(t)(0)(j) := B(t)(0)(j)
-            _B(t)(1)(j) := w0a2+&B(t)(1)(j)
-            _B(t)(2)(j) := w0a2-&B(t)(1)(j)
+            _B(t)(0)(j) := RegNext(B(t)(0)(j), 0.S)
+            _B(t)(1)(j) := w0a2+&b_t_1_j
+            _B(t)(2)(j) := w0a2-&b_t_1_j
             _B(t)(3)(j) := w0m2
             _B(t)(4)(j) := w0m2
-            _B(t)(5)(j) := B(t)(2)(j)
-            _Bi(t)(3)(j) := B(t)(1)(j)
-            _Bi(t)(4)(j) := -B(t)(1)(j)
+            _B(t)(5)(j) := RegNext(B(t)(2)(j), 0.S)
+            _Bi(t)(3)(j) := b_t_1_j
+            _Bi(t)(4)(j) := -b_t_1_j
         }
 
     
@@ -105,39 +104,39 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
         for(i <- 0 to 5){
 
             
-            val w0m2 = Wire(SInt((_B(t)(i)(0).getWidth+1).W))
-            val w0a2 = Wire(SInt((_B(t)(i)(0).getWidth+1).W))
+            val w0m2 = RegNext(_B(t)(i)(0)-&_B(t)(i)(2), 0.S)
+            val w0a2 =RegNext(_B(t)(i)(0)+&_B(t)(i)(2), 0.S)
 
-            w0m2 := _B(t)(i)(0)-&_B(t)(i)(2)
-            w0a2 := _B(t)(i)(0)+&_B(t)(i)(2)
+            val b_t_i_1 = RegNext(_B(t)(i)(1), 0.S)
+            val bi_t_i_1 = RegNext(_Bi(t)(i)(1), 0.S)
 
 
-            __B(t)(i)(0) := _B(t)(i)(0)
-            __B(t)(i)(1) := w0a2+&_B(t)(i)(1)
-            __B(t)(i)(2) := w0a2-&_B(t)(i)(1)
-            __B(t)(i)(3) := w0m2-&_Bi(t)(i)(1)
-            __B(t)(i)(4) := w0m2+&_Bi(t)(i)(1)
-            __B(t)(i)(5) := _B(t)(i)(2)
+            __B(t)(i)(0) := RegNext(_B(t)(i)(0), 0.S)
+            __B(t)(i)(1) := w0a2+&b_t_i_1
+            __B(t)(i)(2) := w0a2-&b_t_i_1
+            __B(t)(i)(3) := w0m2-&bi_t_i_1
+            __B(t)(i)(4) := w0m2+&bi_t_i_1
+            __B(t)(i)(5) := RegNext(_B(t)(i)(2), 0.S)
 
-            val cw0m2 = Wire(SInt((_Bi(t)(i)(0).getWidth+1).W))
-            val cw0a2 = Wire(SInt((_Bi(t)(i)(0).getWidth+1).W))
+            val cw0m2 = RegNext(_Bi(t)(i)(0)-&_Bi(t)(i)(2), 0.S)
+            val cw0a2 = RegNext(_Bi(t)(i)(0)+&_Bi(t)(i)(2), 0.S)
 
-            cw0m2 := _Bi(t)(i)(0)-&_Bi(t)(i)(2)
-            cw0a2 := _Bi(t)(i)(0)+&_Bi(t)(i)(2)
-
-            __Bi(t)(i)(0) := _Bi(t)(i)(0)
-            __Bi(t)(i)(1) := cw0a2+&_Bi(t)(i)(1)
-            __Bi(t)(i)(2) := cw0a2-&_Bi(t)(i)(1)
-            __Bi(t)(i)(3) := cw0m2+&_B(t)(i)(1)
-            __Bi(t)(i)(4) := cw0m2-&_B(t)(i)(1)
-            __Bi(t)(i)(5) := _Bi(t)(i)(2)
+            __Bi(t)(i)(0) := RegNext(_Bi(t)(i)(0), 0.S)
+            __Bi(t)(i)(1) := cw0a2+&bi_t_i_1
+            __Bi(t)(i)(2) := cw0a2-&bi_t_i_1
+            __Bi(t)(i)(3) := cw0m2+&b_t_i_1
+            __Bi(t)(i)(4) := cw0m2-&b_t_i_1
+            __Bi(t)(i)(5) := RegNext(_Bi(t)(i)(2), 0.S)
         }
 
     val conv_weight = Wire(Vec(para_num, new WeightData()))
     // val conv_weight = RegInit(0.U.asTypeOf(new WeightData()))
 
     def clamp_18(x: SInt): SInt = {
-        return x
+        // return x
+        val r = ((1<<17)-1).S(20.W)
+        val l = (-(1<<17)).S(20.W)
+        return Mux(x>=r, r, Mux(x<=l, l, x))
         //return Mux((~x(18))&&x(17), ((1<<17)-1).S(18.W), Mux(x(18)&&(~x(17)), (-(1<<17)).S(18.W), x))
     }
 
@@ -149,15 +148,15 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
                 if(i!=3&&i!=4&&j!=3&&j!=4){
                     conv_weight(t).real(x) := clamp_18(__B(t)(i)(j))
                     x = x+1
-                } else if(i==3){
-                    conv_weight(t).comp1(y) := clamp_18(__B(t)(i)(j)+__Bi(t)(i)(j))
-                    conv_weight(t).comp2(y) := clamp_18(__B(t)(i)(j))
-                    conv_weight(t).comp3(y) := clamp_18(__Bi(t)(i)(j))
-                    y = y+1
-                } else if(i!=4&&j==3){
-                    conv_weight(t).comp1(y) := clamp_18(__B(t)(i)(j)+__Bi(t)(i)(j))
-                    conv_weight(t).comp2(y) := clamp_18(__B(t)(i)(j))
-                    conv_weight(t).comp3(y) := clamp_18(__Bi(t)(i)(j))
+                } else if(i==3||(i!=4&&j==3)){
+                    val __Bx = Wire(SInt(18.W))
+                    val __Bix = Wire(SInt(18.W))
+                    __Bx := clamp_18(__B(t)(i)(j))
+                    __Bix := clamp_18(__Bi(t)(i)(j))
+                    conv_weight(t).sbx(y) := ((__Bx+&__Bix)>>1.U)
+                    conv_weight(t).rbx(y) := __Bx(0)^__Bix(0)
+                    conv_weight(t).bx(y) := __Bx
+                    conv_weight(t).by(y) := __Bix
                     y = y+1
                 }
             }
@@ -169,28 +168,28 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
     switch(io.flag){
         is(CalcType.leakyReLU){
             A(0).input := get_area(io.input, 1, 1, 4, 4)
-            A(1).input := get_area(io.input, 1, 4, 4, 8)
-            A(2).input := get_area(io.input, 4, 1, 8, 4)
-            A(3).input := get_area(io.input, 4, 4, 8, 8)
+            A(1).input := get_area(io.input, 1, 5, 4, 8)
+            A(2).input := get_area(io.input, 5, 1, 8, 4)
+            A(3).input := get_area(io.input, 5, 5, 8, 8)
             for(i <- 0 to 3){
                 A(i).flag := CalcType.leakyReLU
                 A(i).valid_in := io.valid_in
             }
             io.output(0) := set_output(A(0).output(0), A(1).output(0), A(2).output(0), A(3).output(0))
-            io.valid_out := (if(para_num==1) A(0).valid_out else Cat(A(0).valid_out, 0.U((para_num-1).W)))
+            io.valid_out := (if(para_num==1) A(0).valid_out else Cat(0.U((para_num-1).W), A(0).valid_out))
         }
         is(CalcType.calcMult){
             A(0).input := get_area(io.input, 1, 1, 4, 4)
-            A(1).input := get_area(io.input, 1, 4, 4, 8)
-            A(2).input := get_area(io.input, 4, 1, 8, 4)
-            A(3).input := get_area(io.input, 4, 4, 8, 8)
+            A(1).input := get_area(io.input, 1, 5, 4, 8)
+            A(2).input := get_area(io.input, 5, 1, 8, 4)
+            A(3).input := get_area(io.input, 5, 5, 8, 8)
             for(i <- 0 to 3){
                 A(i).weight(0).real := io.multmap(i).real
                 A(i).flag := CalcType.calcMult
                 A(i).valid_in := io.valid_in
             }
             io.output(0) := set_output(A(0).output(0), A(1).output(0), A(2).output(0), A(3).output(0))
-            io.valid_out := (if(para_num==1) A(0).valid_out else Cat(A(0).valid_out, 0.U((para_num-1).W)))
+            io.valid_out := (if(para_num==1) A(0).valid_out else Cat(0.U((para_num-1).W), A(0).valid_out))
         }
         is(CalcType.calcConv){
             A(0).input := get_area(io.input, 0, 0, 5, 5)
@@ -205,7 +204,7 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
             for(t <- 0 to para_num-1)
                 io.output(t) := set_output(A(0).output(t), A(1).output(t), A(2).output(t), A(3).output(t))
             io.valid_out := Cat(Seq.tabulate(para_num){
-                i => A(0).valid_out&io.mask(i)
+                i => A(0).valid_out&io.mask(para_num-1-i)
             }) 
         }
     }

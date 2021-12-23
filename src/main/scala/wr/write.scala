@@ -107,30 +107,17 @@ class CacheWriter(val w: Int, val para_num: Int) extends Module{
         val valid_out = Output(Bool())
     })
 
-    io.out := 0.U.asTypeOf(new AccumuRawData(w))
-    io.valid_out := false.B
-
 
     val cache_valid = RegInit(0.U(para_num.W))
     cache_valid := (cache_valid >> 1.U)|io.valid_in
 
-    val state = RegInit(((para_num-1)).U.asTypeOf(ACounter(2.W)))    // the width of para_num
-
     val cache = RegInit(0.U.asTypeOf(Vec(para_num, new AccumuRawData(w))))
+    for(i <- 0 to para_num-2)
+        cache(i) := Mux(io.valid_in(i), io.in_from_accumu(i), cache(i+1))
+    cache(para_num-1) := Mux(io.valid_in(para_num-1), io.in_from_accumu(para_num-1), 0.U.asTypeOf(cache(para_num-1)))
     
-    for(t <- 0 to para_num-1){
-        when(io.valid_in(t)){
-            cache(t) := io.in_from_accumu(t)
-        }
-    }
-
-    when(cache_valid(0)){
-        state.inc()
-        io.out := cache(state.ccnt)
-        io.valid_out := cache_valid(0)
-    }.elsewhen(state.ccnt.orR){
-        state.ccnt := 0.U
-    }
+    io.out := cache(0)
+    io.valid_out := cache_valid(0)
 
 }
 

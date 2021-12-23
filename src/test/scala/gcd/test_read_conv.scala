@@ -92,7 +92,7 @@ class ReadConvSpec extends FlatSpec with Matchers {
         }
 
         def f(x: Int, L: Int, R: Int): Int = {
-            return (x-L)%(R-L)+L
+            return (x-L)%(R-L+1)+L
         }
 
         var x = 0
