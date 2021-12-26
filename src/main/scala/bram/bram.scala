@@ -295,8 +295,34 @@ class ROMWeightBundle(para_num: Int) extends Bundle{
 
 class ROMWeight(para_num: Int) extends Module{
     val io = IO(new ROMWeightBundle(para_num))
-    val rom = Module(new weight0(StdPara.weight_w, StdPara.weight_addr_w)).io
+    val rom = Module(new weight0(para_num*StdPara.weight_w, StdPara.weight_addr_w)).io
     rom.clka := clock
     rom.addra := io.addr
     io.out := rom.douta.asTypeOf(Vec(para_num, Vec(9, SInt(16.W))))
+}
+
+
+class ROMHalfBias(para_num: Int) extends Module{
+    val io = IO(new ROMBiasBundle(para_num))
+    val rom = Module(new bias0(2*para_num*StdPara.bias_w, StdPara.bias_addr_w)).io
+    rom.clka := clock
+    rom.addra := io.addr >> 1.U
+    val vec = Wire(Vec(2*para_num, SInt(StdPara.bias_w.W)))
+    val flag = RegNext(io.addr(0), false.B)
+    vec := rom.douta.asTypeOf(Vec(2*para_num, SInt(StdPara.bias_w.W)))
+    for(i <- 0 to para_num-1)
+        io.out(i) := Mux(flag, vec(i+para_num), vec(i))
+
+}
+
+class ROMHalfWeight(para_num: Int) extends Module{
+    val io = IO(new ROMWeightBundle(para_num))
+    val rom = Module(new weight0(2*para_num*StdPara.weight_w, StdPara.weight_addr_w)).io
+    rom.clka := clock
+    rom.addra := io.addr >> 1.U
+    val vec = Wire(Vec(2*para_num, Vec(9, SInt(16.W))))
+    vec := rom.douta.asTypeOf(Vec(2*para_num, Vec(9, SInt(16.W))))
+    val flag = RegNext(io.addr(0), false.B)
+    for(i <- 0 to para_num-1)
+        io.out(i) := Mux(flag, vec(i+para_num), vec(i))
 }

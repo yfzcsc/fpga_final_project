@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.experimental.ChiselEnum
 
 
-class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
+class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int, big_w: Int){
     var width = 0
     var height = 0
     var wr_width = 0
@@ -38,7 +38,7 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
         reader1.job_type := ReadType.toConvOrCopy
         
         reader1.job := GenConvReadJob.gen(
-            addr_w, h_w, c_w, id_w,
+            addr_w, h_w, c_w, id_w, big_w, 
             loop_num, begin_loop_num1, loop_h,
             height/2, width, in_chan, 
             big_begin_addr, big_min_addr, big_max_addr,
@@ -57,7 +57,7 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
         reader2.job_type := ReadType.toConvOrCopy
 
         reader2.job := GenConvReadJob.gen(
-            addr_w, h_w, c_w, id_w,
+            addr_w, h_w, c_w, id_w, big_w, 
             loop_num, begin_loop_num2, loop_h,
             height/2, width, in_chan, 
             big_begin_addr, big_min_addr, big_max_addr,
@@ -75,7 +75,7 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
         reader1.job_type := ReadType.toConvOrCopy
         
         reader1.job := GenConvReadJob.gen(
-            addr_w, h_w, c_w, id_w,
+            addr_w, h_w, c_w, id_w, big_w, 
             loop_num, begin_loop_num1, loop_h,
             height/2, width, in_chan, 
             big_begin_addr, big_min_addr, big_max_addr,
@@ -94,7 +94,76 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
         reader2.job_type := ReadType.toConvOrCopy
 
         reader2.job := GenConvReadJob.gen(
-            addr_w, h_w, c_w, id_w,
+            addr_w, h_w, c_w, id_w, big_w, 
+            loop_num, begin_loop_num2, loop_h,
+            height/2, width, in_chan, 
+            big_begin_addr, big_min_addr, big_max_addr,
+            small_begin_addr, small_min_addr, small_max_addr,
+            bank_id_big(1), bank_id_small(1)
+        )
+
+        return reader2
+    }
+
+    def set_ups_reader1(reader1: GraphReaderBundle): Bundle = {
+        val (loop_num, loop_h) = (4, 2)
+        val begin_loop_num1 = 2
+        reader1.flag_job := true.B
+        reader1.job_type := ReadType.toConvOrCopy
+        
+        reader1.job := GenConvReadJob.gen(
+            addr_w, h_w, c_w, id_w, big_w, 
+            loop_num, begin_loop_num1, loop_h,
+            height/2, width, in_chan, 
+            big_begin_addr, big_min_addr, big_max_addr,
+            small_begin_addr, small_min_addr, small_max_addr,
+            bank_id_big(0), bank_id_small(0)
+        )
+
+        return reader1
+    }
+
+    def set_ups_reader2(reader2: GraphReaderBundle): Bundle = {
+        val (loop_num, loop_h) = (4, 2)
+        val begin_loop_num2 = 0
+
+        reader2.flag_job := true.B
+        reader2.job_type := ReadType.toConvOrCopy
+
+        reader2.job := GenConvReadJob.gen(
+            addr_w, h_w, c_w, id_w, big_w, 
+            loop_num, begin_loop_num2, loop_h,
+            height/2, width, in_chan, 
+            big_begin_addr, big_min_addr, big_max_addr,
+            small_begin_addr, small_min_addr, small_max_addr,
+            bank_id_big(1), bank_id_small(1)
+        )
+
+        return reader2
+    }
+
+    def set_copy_reader1_job2(reader1: GraphReaderBundle, copy_cnt: Int): Bundle = {
+        val (loop_num, loop_h) = (2, copy_cnt)
+        val begin_loop_num1 = 1
+        
+        reader1.job2 := GenConvReadJob.gen(
+            addr_w, h_w, c_w, id_w, big_w, 
+            loop_num, begin_loop_num1, loop_h,
+            height/2, width, in_chan, 
+            big_begin_addr, big_min_addr, big_max_addr,
+            small_begin_addr, small_min_addr, small_max_addr,
+            bank_id_big(0), bank_id_small(0)
+        )
+
+        return reader1
+    }
+
+    def set_copy_reader2_job2(reader2: GraphReaderBundle, copy_cnt: Int): Bundle = {
+        val (loop_num, loop_h) = (2, copy_cnt)
+        val begin_loop_num2 = 0
+
+        reader2.job2 := GenConvReadJob.gen(
+            addr_w, h_w, c_w, id_w, big_w, 
             loop_num, begin_loop_num2, loop_h,
             height/2, width, in_chan, 
             big_begin_addr, big_min_addr, big_max_addr,
@@ -111,7 +180,7 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
         val bank_id_small0 = Array[Int](bank_id_small(0)(3), bank_id_small(0)(2), bank_id_small(0)(1), bank_id_small(0)(0))
         
         reader1.job := GenMaxpReadJob.gen(
-            addr_w, h_w, c_w, id_w,
+            addr_w, h_w, c_w, id_w, big_w, 
             1, 1, 1,
             height/2, width, in_chan, 
             big_begin_addr, big_min_addr, big_max_addr,
@@ -129,7 +198,7 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
         val bank_id_small1 = Array[Int](bank_id_small(1)(3), bank_id_small(1)(2), bank_id_small(1)(1), bank_id_small(1)(0))
         
         reader2.job := GenMaxpReadJob.gen(
-            addr_w, h_w, c_w, id_w,
+            addr_w, h_w, c_w, id_w, big_w, 
             1, 1, 1,
             height/2, width, in_chan, 
             big_begin_addr, big_min_addr, big_max_addr,
@@ -150,13 +219,19 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
 
     def set_conv_read_pack(rp: PackReadDataBundle): Bundle = {
         rp.flag_job := true.B
-        rp.job := GenPackJob.gen(addr_w, h_w, c_w, width-1, height-1, in_chan*out_chan/para_num-1)
+        rp.job := GenPackJob.gen(addr_w, h_w, c_w, big_w,  width-1, height-1, in_chan*out_chan/para_num-1, in_chan-1)
         return rp
     }
 
     def set_copy_read_pack(rp: PackReadDataBundle): Bundle = {
         rp.flag_job := true.B
-        rp.job := GenPackJob.gen(addr_w, h_w, c_w, width-1, height-1, in_chan-1)
+        rp.job := GenPackJob.gen(addr_w, h_w, c_w, big_w,  width-1, height-1, in_chan-1, in_chan-1)
+        return rp
+    }
+
+    def set_ups_read_pack(rp: PackReadDataBundle): Bundle = {
+        rp.flag_job := true.B
+        rp.job := GenPackJob.gen(addr_w, h_w, c_w, big_w,  width-1, height-1, in_chan*2-1, in_chan-1)
         return rp
     }
 
@@ -178,6 +253,14 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
         return rs
     }
 
+    def set_ups_switch(rs: ReadSwitchBundle): Bundle = {
+        rs.flag_job := true.B
+        rs.job := ReadSwitchType.toUps
+        rs.in_h := (height*2-1).U
+        rs.in_chan := (in_chan-1).U
+        return rs
+    }
+
     def set_conv_accu(ac: AccumuBundle): Bundle = {
         ac.flag_job := true.B
         ac.csum := (in_chan-1).U
@@ -196,16 +279,13 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
 
     def set_quant(q: QuantBundle): Bundle = {
         q.flag_job := true.B
-        q.quant_in.in_q := quant_q_in.U
-        q.quant_in.out_q := quant_q_out.U
+        q.quant_in := (quant_q_in-quant_q_out).U
         return q
     }
 
-    def set_write(wr: RealWriterBundle): Bundle = {
+    def set_write_alar(wr: RealWriterBundle, al: Int, ar: Int): Bundle = {
         wr.flag_job := true.B
-        val al = 0
         val _min = (x: Int, y: Int) => (if(x>=y) y else x)
-        val ar = out_chan-1
         val bank_id_small0 = Array[Int](bank_id_small(0)(1), bank_id_small(0)(2), bank_id_small(0)(3), bank_id_small(0)(0))
         val bank_id_small1 = Array[Int](bank_id_small(1)(1), bank_id_small(1)(2), bank_id_small(1)(3), bank_id_small(1)(0))
         wr.job.job(0) := GenWriteConvJob.gen(
@@ -225,6 +305,10 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int){
         wr.job.out_chan := (out_chan-1).U
         return wr
     }
+
+    def set_write(wr: RealWriterBundle): Bundle = {
+        return set_write_alar(wr, 0, out_chan-1)
+    }
 }
 
 object GenAllPara{
@@ -233,6 +317,7 @@ object GenAllPara{
         h_w: Int, 
         c_w: Int, 
         id_w: Int,
+        big_w: Int,
         width: Int,
         height: Int,
         wr_width: Int,
@@ -258,7 +343,7 @@ object GenAllPara{
         quant_q_in: Int,
         quant_q_out: Int
     ): GenAllPara = {
-        val ret = new GenAllPara(addr_w, h_w, c_w, id_w)
+        val ret = new GenAllPara(addr_w, h_w, c_w, id_w, big_w)
         ret.width = width
         ret.height = height
         ret.wr_width = wr_width
@@ -293,27 +378,31 @@ object StdPara{
     val w = 16
     val big_bank_w = 768
     val big_bank_addr_w = 10
+    val big_global_size = 1024
     val small_bank_w = 128
     val small_bank_addr_w = 9
+    val small_global_size = 512
     val bias_w = 36
-    val weight_w = 576
+    val weight_w = 144
     val bias_addr_w = 7
     val weight_addr_w = 12
-    val h_w = 16
+    val big_w = 16
+    val h_w = 3
     val addr_w = 10
-    val c_w = 10
+    val c_w = 6
     val id_w = 3
     val para_num = 4
-    val mask = 15
-    val big_max_addr = 515
-    val small_max_addr = 257
+    val mask = (1<<para_num)-1
+    val dsp_w = 20
 
+    val big_global_addr = big_global_size-1
+    val small_global_addr = small_global_size-1
+    val big_max_addr = big_global_size-128-256-1
+    val small_max_addr = small_global_size-64-128-1
+    val big_conv0_addr = big_global_size-128
+    val big_conv1_addr = big_global_size-128-256
+    val small_conv0_addr = small_global_size-64
+    val small_conv1_addr = small_global_size-64-128
     val big_min_addr = 0
     val small_min_addr = 0
-    val big_conv0_addr = 772
-    val big_conv1_addr = 516
-    val small_conv0_addr = 386
-    val small_conv1_addr = 258
-    val big_global_addr = 899
-    val small_global_addr = 449
 }

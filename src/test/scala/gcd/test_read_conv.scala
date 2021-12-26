@@ -18,11 +18,13 @@ class ReadConvTestModule(addr_w: Int, h_w: Int, c_w: Int, id_w: Int, loop_num: I
         val valid_out = Output(Bool())
         val to_banks = Output(new AddressReadGroup(addr_w, id_w))
     })
-    val r = Module(new GraphReader(addr_w, h_w, c_w, id_w))
+    val r = Module(new GraphReader(addr_w, h_w, c_w, id_w, 16))
     val state = RegInit(0.U(2.W))
     
     r.io.flag_job := false.B
     r.io.job := 0.U.asTypeOf(r.io.job)
+    r.io.job2 := 0.U.asTypeOf(r.io.job2)
+    r.io.signal := false.B
     r.io.job_type := 0.U.asTypeOf(r.io.job_type)
     r.io.valid_in := false.B
     io.to_banks := r.io.to_banks
@@ -35,7 +37,7 @@ class ReadConvTestModule(addr_w: Int, h_w: Int, c_w: Int, id_w: Int, loop_num: I
                 r.io.flag_job := true.B
                 r.io.job_type := ReadType.toConvOrCopy
                 r.io.job := GenConvReadJob.gen(
-                    addr_w, h_w, c_w, id_w, loop_num, 0, loop_h, 
+                    addr_w, h_w, c_w, id_w, 16, loop_num, 0, loop_h, 
                     h, w, in_chan, begin_addr, max_addr, min_addr, small_begin_addr, small_min_addr, small_max_addr,
                     bank_id_big, bank_id_small
                 )
@@ -125,7 +127,7 @@ class ReadConvSpec extends FlatSpec with Matchers {
                         }
 
 
-        chisel3.iotesters.Driver(() => new ReadConvTestModule(10, 16, 10, 4, loop_num, loop_h, 
+        chisel3.iotesters.Driver(() => new ReadConvTestModule(10, 3, 6, 4, loop_num, loop_h, 
             h, w, in_chan, begin_addr, max_addr, min_addr, small_begin_addr, small_min_addr, small_max_addr,
             bank_id_big, bank_id_small
         )) { c =>

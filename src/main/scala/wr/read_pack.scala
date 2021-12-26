@@ -11,18 +11,19 @@ class SmallBankReadData(val w: Int) extends Bundle{
     val data = Vec(8, SInt(w.W))
 }
 
-class PackReadDataBundle(val w: Int, val h_w: Int, val c_w: Int) extends TransBundle{
-    val job = Input(new PackJob(w, h_w, c_w))
+class PackReadDataBundle(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) extends TransBundle{
+    val job = Input(new PackJob(w, h_w, c_w, big_w))
     val from_big = Input(Vec(2, new BigBankReadData(w)))
     val from_small = Input(Vec(2, Vec(4, new SmallBankReadData(w))))
     val output = Output(new PackedData(w))
 }
 
-class PackReadData(val w: Int, val h_w: Int, val c_w: Int) extends Module{
-    val io = IO(new PackReadDataBundle(w, h_w, c_w))
-    val cache = RegInit(0.U.asTypeOf(Vec(64, Vec(10, SInt(w.W)))))
+class PackReadData(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) extends Module{
+    val io = IO(new PackReadDataBundle(w, h_w, c_w, big_w))
+    val cache = RegInit(0.U.asTypeOf(Vec(2, Vec(64, Vec(10, SInt(w.W))))))
 
     val cnt_ic = RegInit(0.U.asTypeOf(ACounter(c_w.W)))
+    val cnt_swap = RegInit(0.U.asTypeOf(ACounter(big_w.W)))
     val cnt_x = RegInit(0.U.asTypeOf(ACounter(h_w.W)))
     val cnt_y = RegInit(0.U.asTypeOf(ACounter(h_w.W)))
 
@@ -58,7 +59,7 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int) extends Module{
             io.output.up(9) := io.from_small(state)(3).data(1) 
         }
     }.otherwise{
-        io.output.up := cache(cnt_ic.ccnt)
+        io.output.up := cache(~state)(cnt_ic.ccnt)
     }
     
     when(cnt_y.ccnt===cnt_y.cend){
@@ -106,6 +107,7 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int) extends Module{
         io.output.right := io.from_small(state)(3).data
     }
 
+    
     val nxt_up = Wire(Vec(10, SInt(w.W)))
     for(i <- 2 to 7)
         nxt_up(i) := io.from_big(state).data(48-6+i-2)
@@ -121,20 +123,22 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int) extends Module{
     }.otherwise{
         nxt_up(9) := io.from_small(state)(3).data(7) 
     }
-    cache(cnt_ic.ccnt) := nxt_up
-
+    cache(state)(cnt_ic.ccnt) := nxt_up
     when(io.flag_job){
         cnt_x.set(io.job.cnt_x_end)
         cnt_y.set(io.job.cnt_y_end)
         cnt_ic.set(io.job.in_chan)
+        cnt_swap.set(io.job.cnt_swap_end)
         state := 0.U
     }.elsewhen(io.valid_in){
         io.valid_out := true.B
-        when(cnt_ic.inc()){
+        cnt_ic.inc()
+        when(cnt_swap.inc()){
             state := ~state
             when(cnt_y.inc()){
                 cnt_x.inc()
             }
         }
+        
     }
 }

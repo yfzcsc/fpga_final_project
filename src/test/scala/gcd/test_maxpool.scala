@@ -9,7 +9,7 @@ import org.scalatest._
 import chisel3.experimental.BundleLiterals._
 import chisel3.iotesters._
 
-class Global2(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, num: Int) extends Module{
+class Global2(_w: Int, h_w: Int, c_w: Int, id_w: Int, big_w: Int, addr_w: Int, bias_w: Int, num: Int) extends Module{
     val io = IO(new Bundle{
         val rd_addr1 = Output(new AddressReadGroup(addr_w, id_w))
         val rd_addr2 = Output(new AddressReadGroup(addr_w, id_w))
@@ -35,10 +35,10 @@ class Global2(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
 
 
 
-    val reader1 = Module(new GraphReader(addr_w, h_w, c_w, id_w)).io
-    val reader2 = Module(new GraphReader(addr_w, h_w, c_w, id_w)).io
-    val read_pack = Module(new PackReadData(_w, h_w, c_w)).io
-    val read_switch = Module(new ReadSwitch(_w, 1)).io
+    val reader1 = Module(new GraphReader(addr_w, h_w, c_w, id_w, big_w)).io
+    val reader2 = Module(new GraphReader(addr_w, h_w, c_w, id_w, big_w)).io
+    val read_pack = Module(new PackReadData(_w, h_w, c_w, big_w)).io
+    val read_switch = Module(new ReadSwitch(_w, h_w, c_w, 1)).io
     val read_weight = Module(new WeightReader(_w, addr_w)).io
     val calc8x8 = Module(new Calc8x8(_w, 1)).io
     val accu = Module(new Accumu(_w, addr_w, bias_w, 1)).io
@@ -164,7 +164,7 @@ class Global2(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
         // small addr
         // wr small addr
     */
-    val paras = GenAllPara(addr_w, h_w, c_w, id_w, 
+    val paras = GenAllPara(addr_w, h_w, c_w, id_w, big_w,
         2, 2, 2, 2, 
         2, 2,          
         1, 1,            
@@ -339,8 +339,9 @@ class MaxpoolSpec extends FlatSpec with Matchers {
         val id_w = 16
         val addr_w = 16
         val bias_w = 36
+        val big_w = 16
         val num = 1
-        chisel3.iotesters.Driver(() => new Global2(w, h_w, c_w, id_w, addr_w, bias_w, num)) { c =>
+        chisel3.iotesters.Driver(() => new Global2(w, h_w, c_w, id_w, big_w, addr_w, bias_w, num)) { c =>
             new MaxpoolTester(c, w, h_w, c_w, id_w, addr_w, bias_w, num)
         } should be (true)
     }

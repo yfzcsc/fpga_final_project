@@ -9,7 +9,7 @@ import org.scalatest._
 import chisel3.experimental.BundleLiterals._
 import chisel3.iotesters._
 
-class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, num: Int) extends Module{
+class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, big_w: Int, addr_w: Int, bias_w: Int, num: Int) extends Module{
     val io = IO(new Bundle{
         val rd_addr1 = Output(new AddressReadGroup(addr_w, id_w))
         val rd_addr2 = Output(new AddressReadGroup(addr_w, id_w))
@@ -35,10 +35,10 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
 
 
 
-    val reader1 = Module(new GraphReader(addr_w, h_w, c_w, id_w)).io
-    val reader2 = Module(new GraphReader(addr_w, h_w, c_w, id_w)).io
-    val read_pack = Module(new PackReadData(_w, h_w, c_w)).io
-    val read_switch = Module(new ReadSwitch(_w, 1)).io
+    val reader1 = Module(new GraphReader(addr_w, h_w, c_w, id_w, big_w)).io
+    val reader2 = Module(new GraphReader(addr_w, h_w, c_w, id_w, big_w)).io
+    val read_pack = Module(new PackReadData(_w, h_w, c_w, big_w)).io
+    val read_switch = Module(new ReadSwitch(_w, h_w, c_w, 1)).io
     val read_weight = Module(new WeightReader(_w, addr_w)).io
     val calc8x8 = Module(new Calc8x8(_w, 1)).io
     val accu = Module(new Accumu(_w, addr_w, bias_w, 1)).io
@@ -57,6 +57,8 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
     reader1.flag_job := false.B
     reader1.valid_in := false.B
     reader1.job := 0.U.asTypeOf(reader1.job)
+    reader1.job2 := 0.U.asTypeOf(reader1.job2)
+    reader1.signal := false.B
     reader1.job_type := 0.U.asTypeOf(reader1.job_type)
 
     io.rd_valid_out := reader2.valid_out
@@ -65,6 +67,8 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
     reader2.valid_in := false.B
     reader2.job := 0.U.asTypeOf(reader2.job)
     reader2.job_type := 0.U.asTypeOf(reader2.job_type)
+    reader2.job2 := 0.U.asTypeOf(reader1.job2)
+    reader2.signal := false.B
 
     read_weight.valid_in := false.B
     read_weight.addr_end := 0.U
@@ -167,7 +171,7 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
         // small addr
         // wr small addr
     */
-    val paras = GenAllPara(addr_w, h_w, c_w, id_w, 
+    val paras = GenAllPara(addr_w, h_w, c_w, id_w, big_w, 
         2, 2, 2, 2, 
         2, 2,          
         1, 1,            
@@ -206,7 +210,7 @@ class Global1(_w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, 
 }
 
 
-class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w: Int, bias_w: Int, num: Int) extends PeekPokeTester(dut){
+class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, big_w: Int, addr_w: Int, bias_w: Int, num: Int) extends PeekPokeTester(dut){
     
     var bank_id_big = Array(0, 1)
     var bank_id_small = Array(Array(3, 0, 1, 2), Array(7, 4, 5, 6))
@@ -364,9 +368,10 @@ class ConvSpec extends FlatSpec with Matchers {
         val id_w = 16
         val addr_w = 16
         val bias_w = 36
+        val big_w = 16
         val num = 1
-        chisel3.iotesters.Driver(() => new Global1(w, h_w, c_w, id_w, addr_w, bias_w, num)) { c =>
-            new ConvTester(c, w, h_w, c_w, id_w, addr_w, bias_w, num)
+        chisel3.iotesters.Driver(() => new Global1(w, h_w, c_w, id_w, big_w, addr_w, bias_w, num)) { c =>
+            new ConvTester(c, w, h_w, c_w, id_w, big_w, addr_w, bias_w, num)
         } should be (true)
     }
 }

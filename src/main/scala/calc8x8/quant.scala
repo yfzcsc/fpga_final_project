@@ -7,22 +7,16 @@ class QuantedData(val w: Int) extends Bundle{
     val mat = Vec(64, SInt(w.W))
 }
 
-class QuantJob(val w: Int) extends Bundle{
-    val in_q = UInt(6.W)
-    val out_q = UInt(6.W)
-}
-
 class QuantBundle(val w: Int) extends TransBundle{
     val in_from_accumu = Input(new AccumuRawData(w))
     val result = Output(new QuantedData(w))
-    val quant_in = Input(new QuantJob(w))
+    val quant_in = Input(UInt(5.W))
 }
 
 class Quant(val w: Int) extends Module{
     val io = IO(new QuantBundle(w))
 
 
-    val quant = RegInit(0.U.asTypeOf(new QuantJob(w)))
     val r_q = RegInit(0.U(5.W))
 
     io.valid_out := false.B
@@ -35,14 +29,16 @@ class Quant(val w: Int) extends Module{
         ret1 := x>>a
         return Mux(ret1<=ret3, ret3, Mux(ret1>=ret2, ret2, ret1))
     }
+
+    val mat = RegInit(0.U.asTypeOf(new AccumuRawData(w)))
+    mat := io.in_from_accumu
     for(i <- 0 to 63)
-        io.result.mat(i) := clamp_rs(io.in_from_accumu.mat(i), r_q)
+        io.result.mat(i) := clamp_rs(mat.mat(i), r_q)
     
     when(io.flag_job){
-        quant := io.quant_in
-        r_q := io.quant_in.in_q-io.quant_in.out_q
+        r_q := io.quant_in
     }.otherwise{
-        io.valid_out := io.valid_in
+        io.valid_out := RegNext(io.valid_in, false.B)
     }
 
 }

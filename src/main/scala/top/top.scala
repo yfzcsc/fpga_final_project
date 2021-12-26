@@ -10,13 +10,14 @@ class Top extends Module{
     val io = IO(new Bundle{
         val complete = Output(Bool())
         val valid = Output(Bool())
+        // val output = Output(UInt(1.W))
         val output = Output(SInt(16.W))
     })
 
-    val reader1 = Module(new GraphReader(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w)).io
-    val reader2 = Module(new GraphReader(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w)).io
-    val read_pack = Module(new PackReadData(StdPara.w, StdPara.h_w, StdPara.c_w)).io
-    val read_switch = Module(new ReadSwitch(StdPara.w, StdPara.para_num)).io
+    val reader1 = Module(new GraphReader(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w, StdPara.big_w)).io
+    val reader2 = Module(new GraphReader(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w, StdPara.big_w)).io
+    val read_pack = Module(new PackReadData(StdPara.w, StdPara.h_w, StdPara.c_w, StdPara.big_w)).io
+    val read_switch = Module(new ReadSwitch(StdPara.w, StdPara.h_w, StdPara.c_w, StdPara.para_num)).io
     val read_weight = Module(new WeightReader(StdPara.w, StdPara.weight_addr_w)).io
     val calc8x8 = Module(new Calc8x8(StdPara.w, StdPara.para_num)).io
     val accu = Module(new Accumu(StdPara.w, StdPara.bias_addr_w, StdPara.bias_w, StdPara.para_num)).io
@@ -27,6 +28,8 @@ class Top extends Module{
     val writer = Module(new RealWriter(StdPara.w, StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w)).io
     val maxpool = Module(new Maxpool(StdPara.w)).io
 
+    // val rom_weight = if(StdPara.para_num==4) Module(new ROMWeight(StdPara.para_num)).io else Module(new ROMHalfWeight(StdPara.para_num)).io
+    // val rom_bias = if(StdPara.para_num==4) Module(new ROMBias(StdPara.para_num)).io else Module(new ROMHalfBias(StdPara.para_num)).io
     val rom_weight = Module(new ROMWeight(StdPara.para_num)).io
     val rom_bias = Module(new ROMBias(StdPara.para_num)).io
     val bram = Module(new RAMGroup(StdPara.w, StdPara.addr_w, StdPara.id_w)).io
@@ -39,6 +42,8 @@ class Top extends Module{
     reader1.valid_in := false.B
     reader1.job := 0.U.asTypeOf(reader1.job)
     reader1.job_type := 0.U.asTypeOf(reader1.job_type)
+    reader1.job2 := 0.U.asTypeOf(reader1.job2)
+    reader1.signal := false.B
 
     bram.rd_valid_in := reader2.valid_out
     bram.rd_addr2 := reader2.to_banks
@@ -46,6 +51,8 @@ class Top extends Module{
     reader2.valid_in := false.B
     reader2.job := 0.U.asTypeOf(reader2.job)
     reader2.job_type := 0.U.asTypeOf(reader2.job_type)
+    reader2.job2 := 0.U.asTypeOf(reader2.job2)
+    reader2.signal := false.B
 
     read_weight.valid_in := false.B
     read_weight.addr_end := 0.U
@@ -65,6 +72,8 @@ class Top extends Module{
     read_switch.valid_in := read_pack.valid_out
     read_switch.from := read_pack.output
     read_switch.from_weight := rom_weight.out
+    read_switch.in_h := 0.U
+    read_switch.in_chan := 0.U
 
     calc8x8.input := read_switch.to_calc8x8
     calc8x8.flag := 0.U.asTypeOf(calc8x8.flag)
@@ -96,8 +105,8 @@ class Top extends Module{
    
     maxpool.from_big := bram.rd_big
     for(t <- 0 to 1){
-        maxpool.from_small(t)(0) := bram.rd_small(t)(1)
-        maxpool.from_small(t)(1) := bram.rd_small(t)(2)
+        maxpool.from_small(t)(0) := bram.rd_small(t)(0)
+        maxpool.from_small(t)(1) := bram.rd_small(t)(1)
     }
         
     maxpool.valid_in := read_switch.valid_out_maxp
@@ -150,7 +159,7 @@ class Top extends Module{
     
     
     val counter = RegInit(0.U.asTypeOf(ACounter(16.W)))
-    val state = RegInit(0.U(6.W))
+    val state = RegInit(0.U(8.W))
 
 
     val output_cache = RegInit(VecInit(Seq.fill(64)(0.S(16.W))))
@@ -158,28 +167,258 @@ class Top extends Module{
     var num_stages = 0
 
     CONV(4, 4, 4, 16, 30, 15)
-    // RELU(4, 4, 16, 15+15, 17)
-    CONV(4, 4, 16, 32, 32, 16)
+    
+    // CONV(4, 4, 16, 32, 32, 16)
     // RELU(4, 4, 32, 16+15, 17)
-    // RELU0(4, 4, 16, 15+15, 17)
+    RELU0(4, 4, 16, 15+15, 17)
+    // weight_addr = 0
+    // bias_addr = 0
+    // big_addr = 0
+    // small_addr = 0
+    // CONV(4, 4, 4, 16, 30, 15)
+    // RELU(4, 4, 16, 15+15, 17)
+    // LAST_PRINT(4, 4, 16)
 
-    // CONV1(4, 4, 16, 32, 32, 16)
-    // RELU1(4, 4, 32, 16+15, 17)
-    LAST_PRINT(4, 4, 32)
-    // MAXPOOL(4, 4, 32)
-    // CONV(2, 2, 32, 64, 32, 14)
-    // RELU(2, 2, 64, 14+15, 14)
-    // CONV(2, 2, 64, 64, 29, 11)
-    // RELU(2, 2, 64, 11+15, 11)
-    // LAST_PRINT(2, 2, 64)
+    CONV1(4, 4, 16, 32, 32, 16)
+    RELU1(4, 4, 32, 16+15, 17)
+    MAXPOOL(4, 4, 32)
+    //conv_2
+    CONV(2, 2, 32, 64, 32, 14)
+    RELU(2, 2, 64, 14+15, 14)
+
+    // conv_6
+    CONV(2, 2, 64, 64, 29, 11)                 
+    RELU(2, 2, 64, 11+15, 11)
+
+
+    // conv_u1
+    UPS(2, 2, 64)
+
+    CONV(4, 4, 64, 32, 26, 8)
+    RELU(4, 4, 32, 8+15, 8)
+    // LAST_PRINT(4, 4, 32)
+    println(num_stages)
+    CONVMULT()
+    println(num_stages)
+
+    // conv_u4
+    UPS(4, 4, 16)
+    CONV(8, 8, 16, 16, 27, 12)
+    RELU(8, 8, 16, 12+15, 12)
+
+    // conv_10
+    CONV(8, 8, 16, 4, 29, 13)
+    LAST_PRINT(8, 8, 4)
+    // LAST_PRINT(2, 2, 32)
 
 
 
+    def CONVMULT(){
+        WRITEHALF_CONV0(8, 8, 17, 8)
+        LAST_PRINT(4, 4, 64)
+        println(num_stages)
+        CONV(4, 4, 64, 16, 22, 6)
+        println(num_stages)
+        RELU(4, 4, 16, 6+15, 6)
+        println(num_stages)
+        MULT(6+17, 11)   
+    }
+
+    def MULT(q_in: Int, q_out: Int){
+        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
+            width=4, 
+            height=4, 
+            wr_width=4, 
+            wr_height=4,
+            in_chan=16, 
+            out_chan=16,
+            para_num=StdPara.para_num, 
+            mask=StdPara.mask,
+            big_begin_addr=big_addr, 
+            big_max_addr=StdPara.big_max_addr, 
+            big_min_addr=StdPara.big_min_addr,   
+            wr_big_begin_addr=nxt_big(big_addr+16*4*4/2), 
+            wr_big_max_addr=StdPara.big_max_addr, 
+            wr_big_min_addr=StdPara.big_min_addr, 
+            small_begin_addr=small_addr, 
+            small_max_addr=StdPara.small_max_addr, 
+            small_min_addr=StdPara.small_min_addr,    
+            wr_small_begin_addr=nxt_small(small_addr+16*4*4/4), 
+            wr_small_max_addr=StdPara.small_max_addr, 
+            wr_small_min_addr=StdPara.small_min_addr, 
+            weight_begin_addr=0, 
+            bias_begin_addr=0, 
+            quant_q_in=q_in, 
+            quant_q_out=q_out   
+        )
+
+        val paras2 = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
+            width=4, 
+            height=4, 
+            wr_width=4, 
+            wr_height=4,
+            in_chan=16, 
+            out_chan=16,
+            para_num=StdPara.para_num, 
+            mask=StdPara.mask,
+            big_begin_addr=StdPara.big_conv0_addr, 
+            big_max_addr=StdPara.big_global_addr, 
+            big_min_addr=0,   
+            wr_big_begin_addr=0, 
+            wr_big_max_addr=0, 
+            wr_big_min_addr=0, 
+            small_begin_addr=StdPara.small_conv0_addr, 
+            small_max_addr=StdPara.small_global_addr, 
+            small_min_addr=0,     
+            wr_small_begin_addr=0, 
+            wr_small_max_addr=0, 
+            wr_small_min_addr=0, 
+            weight_begin_addr=0, 
+            bias_begin_addr=0, 
+            quant_q_in=0, 
+            quant_q_out=0 
+        )
+
+        big_addr = nxt_big(big_addr+16*4*4/2)
+        small_addr = nxt_small(small_addr+16*4*4/4)
+        when(state===(num_stages).U){
+            paras.set_copy_reader1(reader1, 1)
+            paras.set_copy_reader2(reader2, 1)
+            paras2.set_copy_reader1_job2(reader1, 1)
+            paras2.set_copy_reader2_job2(reader2, 1)
+            paras.set_copy_read_pack(read_pack)
+            paras.set_conv_read_switch(read_switch)
+            paras.set_unuse_accu(accu)
+            paras.set_quant(quant)
+            paras.set_write(writer)
+            counter.set((16*4*4-1).U)
+            state := (num_stages+1).U
+        }
+        num_stages += 1
+        when(state===(num_stages).U){
+            when(writer.valid_out){
+                when(counter.inc()){
+                    state := (num_stages+1).U
+                }
+            }
+            reader1.valid_in := true.B
+            reader2.valid_in := true.B
+            reader1.signal := true.B
+            reader2.signal := true.B
+            calc8x8.flag := CalcType.calcMult
+        }
+        num_stages += 1
+
+    }
+
+    def WRITEHALF_CONV0(q_in: Int, q_out: Int, q_in2: Int, q_out2: Int){
+        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
+            width=4, 
+            height=4, 
+            wr_width=4, 
+            wr_height=4,
+            in_chan=32, 
+            out_chan=32*2,
+            para_num=StdPara.para_num, 
+            mask=StdPara.mask,
+            big_begin_addr=big_addr, 
+            big_max_addr=StdPara.big_max_addr, 
+            big_min_addr=StdPara.big_min_addr,   
+            wr_big_begin_addr=nxt_big(big_addr+32*4*4/2+0), 
+            wr_big_max_addr=StdPara.big_max_addr, 
+            wr_big_min_addr=StdPara.big_min_addr, 
+            small_begin_addr=small_addr, 
+            small_max_addr=StdPara.small_max_addr, 
+            small_min_addr=StdPara.small_min_addr,    
+            wr_small_begin_addr=nxt_small(small_addr+32*4*4/4+0), 
+            wr_small_max_addr=StdPara.small_max_addr, 
+            wr_small_min_addr=StdPara.small_min_addr, 
+            weight_begin_addr=0, 
+            bias_begin_addr=0, 
+            quant_q_in=q_in, 
+            quant_q_out=q_out   
+        )
+
+        val paras2 = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
+            width=4, 
+            height=4, 
+            wr_width=4, 
+            wr_height=4,
+            in_chan=32, 
+            out_chan=32*2,
+            para_num=StdPara.para_num, 
+            mask=StdPara.mask,
+            big_begin_addr=StdPara.big_conv1_addr, 
+            big_max_addr=StdPara.big_global_addr, 
+            big_min_addr=0,   
+            wr_big_begin_addr=nxt_big(big_addr+32*4*4/2+32), 
+            wr_big_max_addr=StdPara.big_max_addr, 
+            wr_big_min_addr=StdPara.big_min_addr, 
+            small_begin_addr=StdPara.small_conv1_addr, 
+            small_max_addr=StdPara.small_global_addr, 
+            small_min_addr=0,     
+            wr_small_begin_addr=nxt_small(small_addr+32*4*4/4+32), 
+            wr_small_max_addr=StdPara.small_max_addr, 
+            wr_small_min_addr=StdPara.small_min_addr, 
+            weight_begin_addr=0, 
+            bias_begin_addr=0, 
+            quant_q_in=q_in2, 
+            quant_q_out=q_out2  
+        )
+
+        big_addr = nxt_big(big_addr+32*4*4/2)
+        small_addr = nxt_small(small_addr+32*4*4/4)
+        when(state===(num_stages).U){
+            paras.set_copy_reader1(reader1, 1)
+            paras.set_copy_reader2(reader2, 1)
+            paras.set_copy_read_pack(read_pack)
+            paras.set_copy_switch(read_switch)
+            paras.set_unuse_accu(accu)
+            paras.set_quant(quant)
+            paras.set_write_alar(writer, 0, 32-1)
+            counter.set((32*4*4-1).U)
+            state := (num_stages+1).U
+        }
+        num_stages += 1
+        when(state===(num_stages).U){
+            when(writer.valid_out){
+                when(counter.inc()){
+                    state := (num_stages+1).U
+                }
+            }
+            reader1.valid_in := true.B
+            reader2.valid_in := true.B
+        }
+        num_stages += 1
+        when(state===(num_stages).U){
+            paras2.set_copy_reader1(reader1, 1)
+            paras2.set_copy_reader2(reader2, 1)
+            paras2.set_copy_read_pack(read_pack)
+            paras2.set_conv_read_switch(read_switch)
+            paras2.set_unuse_accu(accu)
+            paras2.set_quant(quant)
+            paras2.set_write_alar(writer, 32, 64-1)
+            counter.set((32*4*4-1).U)
+            state := (num_stages+1).U
+        }
+        num_stages += 1
+        when(state===(num_stages).U){
+            when(writer.valid_out){
+                when(counter.inc()){
+                    state := (num_stages+1).U
+                }
+            }
+            reader1.valid_in := true.B
+            reader2.valid_in := true.B
+            calc8x8.flag := CalcType.empty
+        }
+        num_stages += 1
+    }
 
 
     def CONV(w: Int, h: Int, in_chan: Int, out_chan: Int, conv_q_in: Int, 
                         conv_q_out: Int): Unit = {
-        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, 
+        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
             width=w, 
             height=h, 
             wr_width=w, 
@@ -207,9 +446,8 @@ class Top extends Module{
         )
         big_addr = nxt_big(big_addr+in_chan*w*h/2)
         small_addr = nxt_small(small_addr+in_chan*w*h/4)
-        weight_addr += in_chan*out_chan/StdPara.para_num
-        bias_addr += out_chan/StdPara.para_num
-
+        weight_addr += in_chan*out_chan/4
+        bias_addr += out_chan/4
 
         when(state===(num_stages).U){
             paras.set_conv_reader1(reader1)
@@ -221,8 +459,6 @@ class Top extends Module{
             paras.set_write(writer)
             paras.set_conv_read_switch(read_switch)
 
-            calc8x8.flag := CalcType.calcConv
-            calc8x8.mask := paras.mask.U
             counter.set((out_chan*w*h-1).U)
             state := (num_stages+1).U
         }
@@ -244,7 +480,7 @@ class Top extends Module{
 
     def CONV1(w: Int, h: Int, in_chan: Int, out_chan: Int, conv_q_in: Int, 
                         conv_q_out: Int): Unit = {
-        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, 
+        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
             width=w, 
             height=h, 
             wr_width=w, 
@@ -270,9 +506,8 @@ class Top extends Module{
             quant_q_in=conv_q_in, 
             quant_q_out=conv_q_out   
         )
-        weight_addr += in_chan*out_chan/StdPara.para_num
-        bias_addr += out_chan/StdPara.para_num
-
+        weight_addr += in_chan*out_chan/4
+        bias_addr += out_chan/4
 
         when(state===(num_stages).U){
             paras.set_conv_reader1(reader1)
@@ -284,7 +519,6 @@ class Top extends Module{
             paras.set_write(writer)
             paras.set_conv_read_switch(read_switch)
 
-            calc8x8.flag := CalcType.calcConv
             calc8x8.mask := paras.mask.U
             counter.set((out_chan*w*h-1).U)
             state := (num_stages+1).U
@@ -306,7 +540,7 @@ class Top extends Module{
     }
 
     def RELU0(w: Int, h: Int, in_chan: Int, relu_q_in: Int, relu_q_out: Int): Unit = {
-        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, 
+        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
             width=w, 
             height=h, 
             wr_width=w, 
@@ -341,7 +575,6 @@ class Top extends Module{
             paras.set_unuse_accu(accu)
             paras.set_quant(quant)
             paras.set_write(writer)
-            calc8x8.flag := CalcType.leakyReLU
             counter.set((in_chan*w*h-1).U)
             state := (num_stages+1).U
         }
@@ -360,7 +593,7 @@ class Top extends Module{
     }
 
     def RELU1(w: Int, h: Int, in_chan: Int, relu_q_in: Int, relu_q_out: Int): Unit = {
-        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, 
+        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
             width=w, 
             height=h, 
             wr_width=w, 
@@ -395,7 +628,6 @@ class Top extends Module{
             paras.set_unuse_accu(accu)
             paras.set_quant(quant)
             paras.set_write(writer)
-            calc8x8.flag := CalcType.leakyReLU
             counter.set((in_chan*w*h-1).U)
             state := (num_stages+1).U
         }
@@ -414,7 +646,7 @@ class Top extends Module{
     }
 
     def RELU(w: Int, h: Int, in_chan: Int, relu_q_in: Int, relu_q_out: Int): Unit = {
-        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, 
+        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
             width=w, 
             height=h, 
             wr_width=w, 
@@ -451,7 +683,6 @@ class Top extends Module{
             paras.set_unuse_accu(accu)
             paras.set_quant(quant)
             paras.set_write(writer)
-            calc8x8.flag := CalcType.leakyReLU
             counter.set((in_chan*w*h-1).U)
             state := (num_stages+1).U
         }
@@ -470,7 +701,7 @@ class Top extends Module{
     }
 
     def MAXPOOL(w: Int, h: Int, in_chan: Int): Unit = {
-        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, 
+        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
             width=w, 
             height=h, 
             wr_width=w/2, 
@@ -520,10 +751,10 @@ class Top extends Module{
     }
 
     def UPS(w: Int, h: Int, in_chan: Int): Unit = {
-        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, 
+        val paras = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, big_w=StdPara.big_w, 
             width=w, 
             height=h, 
-            wr_width=w, 
+            wr_width=w*2, 
             wr_height=h*2,
             in_chan=in_chan, 
             out_chan=in_chan,
@@ -532,13 +763,13 @@ class Top extends Module{
             big_begin_addr=big_addr, 
             big_max_addr=StdPara.big_max_addr, 
             big_min_addr=StdPara.big_min_addr,   
-            wr_big_begin_addr=nxt_big(big_addr+in_chan*w*h), 
+            wr_big_begin_addr=nxt_big(big_addr+in_chan*w*h/2), 
             wr_big_max_addr=StdPara.big_max_addr, 
             wr_big_min_addr=StdPara.big_min_addr, 
             small_begin_addr=small_addr, 
             small_max_addr=StdPara.small_max_addr, 
             small_min_addr=StdPara.small_min_addr,    
-            wr_small_begin_addr=nxt_small(small_addr+in_chan*w*h/2), 
+            wr_small_begin_addr=nxt_small(small_addr+in_chan*w*h/4), 
             wr_small_max_addr=StdPara.small_max_addr, 
             wr_small_min_addr=StdPara.small_min_addr, 
             weight_begin_addr=0, 
@@ -547,65 +778,18 @@ class Top extends Module{
             quant_q_out=0  
         )
 
-        val paras2 = GenAllPara(addr_w=StdPara.addr_w, h_w=StdPara.h_w, c_w=StdPara.c_w, id_w=StdPara.id_w, 
-            width=w, 
-            height=h, 
-            wr_width=w, 
-            wr_height=h*2,
-            in_chan=in_chan, 
-            out_chan=in_chan,
-            para_num=StdPara.para_num, 
-            mask=StdPara.mask,
-            big_begin_addr=big_addr, 
-            big_max_addr=StdPara.big_max_addr, 
-            big_min_addr=StdPara.big_min_addr,   
-            wr_big_begin_addr=nxt_big(big_addr+in_chan*w*h*3), 
-            wr_big_max_addr=StdPara.big_max_addr, 
-            wr_big_min_addr=StdPara.big_min_addr, 
-            small_begin_addr=small_addr, 
-            small_max_addr=StdPara.small_max_addr, 
-            small_min_addr=StdPara.small_min_addr,    
-            wr_small_begin_addr=nxt_small(small_addr+in_chan*w*h*3/2), 
-            wr_small_max_addr=StdPara.small_max_addr, 
-            wr_small_min_addr=StdPara.small_min_addr, 
-            weight_begin_addr=0, 
-            bias_begin_addr=0, 
-            quant_q_in=0, 
-            quant_q_out=0 
-        )
-
-        big_addr = nxt_big(big_addr+in_chan*w*h)
-        small_addr = nxt_small(small_addr+in_chan*w*h/2)
-
+        big_addr = nxt_big(big_addr+in_chan*w*h/2)
+        small_addr = nxt_small(small_addr+in_chan*w*h/4)
 
         when(state===(num_stages).U){
-            paras.set_copy_reader1(reader1, 2)
-            paras.set_copy_reader2(reader2, 2)
+            paras.set_ups_reader1(reader1)
+            paras.set_ups_reader2(reader2)
+            paras.set_ups_read_pack(read_pack)
             paras.set_write(writer)
-            paras.set_copy_switch(read_switch)
-            counter.set((in_chan*w*h*2-1).U)
+            paras.set_ups_switch(read_switch)
+            counter.set((in_chan*w*h*4-1).U)
 
-            state := 1.U
-        }
-        num_stages += 1
-        when(state===(num_stages).U){
-            when(writer.valid_out){
-                when(counter.inc()){
-                    state := (num_stages+1).U
-                }
-            }
-            reader1.valid_in := true.B
-            reader2.valid_in := true.B
-        }
-        num_stages += 1
-        when(state===(num_stages).U){
-            paras2.set_copy_reader1(reader1, 2)
-            paras2.set_copy_reader2(reader2, 2)
-            paras2.set_write(writer)
-            paras2.set_copy_switch(read_switch)
-            counter.set((in_chan*w*h*2-1).U)
-
-            state := 1.U
+            state := (num_stages+1).U
         }
         num_stages += 1
         when(state===(num_stages).U){
@@ -623,7 +807,7 @@ class Top extends Module{
     def LAST_PRINT(w: Int, h: Int, in_chan: Int): Unit = {
         val lst_counter = RegInit(0.U.asTypeOf(ACounter(16.W)))
         val lst_64_counter = RegInit(0.U.asTypeOf(ACounter(16.W)))
-        val paras_print = GenAllPara(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w,
+        val paras_print = GenAllPara(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w, big_w=StdPara.big_w, 
             w, h, w, h, 
             in_chan, 1,
             1, 0,
@@ -663,14 +847,17 @@ class Top extends Module{
                 io.complete := true.B
                 io.valid := true.B
                 output_cache := read_pack.output.mat
+                // io.output := read_pack.output.mat(0)(16-1).asUInt^read_pack.output.mat(0)(1).asUInt
                 io.output := read_pack.output.mat(0)
             }.otherwise{
                 io.valid := true.B
+                // io.output := output_cache(lst_64_counter.ccnt)(16-1).asUInt^output_cache(lst_64_counter.ccnt)(1).asUInt
                 io.output := output_cache(lst_64_counter.ccnt)
             }
         }
         when(state===(num_stages+3).U){
             state := (num_stages+3).U
         }
+        num_stages += 4
     }
 }

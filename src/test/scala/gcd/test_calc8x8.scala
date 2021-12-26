@@ -11,42 +11,74 @@ import chisel3.iotesters._
 class Calc8x8Tester(dut: Calc8x8) extends PeekPokeTester(dut) {
 
     //val rnd = new scala.util.Random
-    var A = Array.tabulate(10, 10) {
-        (i, j) => rnd.nextInt(65536)-32768
-    }
-    for(i <- 0 to 63){
-        poke(dut.io.input.mat(i), A(i/8+1)(i%8+1))
-    }
-    for(i <- 0 to 9) {
-        poke(dut.io.input.up(i), A(0)(i))
-    }
-    for(i <- 0 to 7) {
-        poke(dut.io.input.left(i), A(i+1)(0))
-    }
-    for(i <- 0 to 7) {
-        poke(dut.io.input.right(i), A(i+1)(9))
-    }
-    for(i <- 0 to 9) {
-        poke(dut.io.input.down(i), A(9)(i))
-    }
+    val T = 10
+    for(t <- 0 until T){
+        var A = Array.tabulate(10, 10) {
+            (i, j) => rnd.nextInt(5)-32768
+        }
+        for(i <- 0 to 63){
+            poke(dut.io.input.mat(i), A(i/8+1)(i%8+1))
+        }
+        for(i <- 0 to 9) {
+            poke(dut.io.input.up(i), A(0)(i))
+        }
+        for(i <- 0 to 7) {
+            poke(dut.io.input.left(i), A(i+1)(0))
+        }
+        for(i <- 0 to 7) {
+            poke(dut.io.input.right(i), A(i+1)(9))
+        }
+        for(i <- 0 to 9) {
+            poke(dut.io.input.down(i), A(9)(i))
+        }
 
-    val B = Array.fill[Int](4, 3, 3)(0)
-    for(t <- 0 to 3)
-        for(i <- 0 to 8) B(t)(i/3)(i%3) = rnd.nextInt(65536)-32768
+        val B = Array.fill[Int](4, 3, 3)(0)
+        for(t <- 0 to 3)
+            for(i <- 0 to 8) B(t)(i/3)(i%3) = rnd.nextInt(5)-32768
 
-    val std = Array.tabulate(4, 8, 8) {
-        (t, i, j) => {
-            var sum = BigInt(0)
-            for(ii <- i to i+2)
-                for(jj <- j to j+2){
-                    var a = A(ii)(jj)
-                    var b = B(t)(ii-i)(jj-j)
-                    sum = sum+a*b
-                }
-                    
-            sum
+        val std = Array.tabulate(4, 8, 8) {
+            (t, i, j) => {
+                var sum = BigInt(0)
+                for(ii <- i to i+2)
+                    for(jj <- j to j+2){
+                        var a = A(ii)(jj)
+                        var b = B(t)(ii-i)(jj-j)
+                        sum = sum+BigInt(a)*b
+                    }
+                        
+                sum
+            }
+        }
+        for(t <- 0 to 3)
+            for(i <- 0 to 8)
+                poke(dut.io.weight(t).real(i), B(t)(i/3)(i%3))
+
+        poke(dut.io.flag, 3)
+        poke(dut.io.mask, 15)
+        poke(dut.io.valid_in, true)
+        var stop = false
+        while(!stop){
+            step(1)
+            poke(dut.io.valid_in, false)
+            if(peek(dut.io.valid_out)==15){
+                println("[valid: " + peek(dut.io.valid_out).toString + "] Result:")
+                for(t <- 0 to 3)
+                    for(j <- 0 to 7){
+                        var str = ""
+                        for(k <- 0 to 7){
+                            var x = peek(dut.io.output(t).mat(j*8+k)).toString()
+                            expect(dut.io.output(t).mat(j*8+k), std(t)(j)(k))
+                            str = str+x+" "
+                        } 
+                        println(str)
+                    }
+
+                stop = true
+            }
+            
         }
     }
+    
     /*
     val _B = Array.fill[Int](6, 3)(0)
     val _Bi = Array.fill[Int](6, 3)(0)
@@ -101,33 +133,6 @@ class Calc8x8Tester(dut: Calc8x8) extends PeekPokeTester(dut) {
             }
         }
     }*/
-    for(t <- 0 to 3)
-        for(i <- 0 to 8)
-            poke(dut.io.weight(t).real(i), B(t)(i/3)(i%3))
-
-    poke(dut.io.flag, 2)
-    poke(dut.io.mask, 15)
-    poke(dut.io.valid_in, true)
-    var stop = false
-    while(!stop){
-        step(1)
-        if(peek(dut.io.valid_out)==15){
-            println("[valid: " + peek(dut.io.valid_out).toString + "] Result:")
-            for(t <- 0 to 3)
-                for(j <- 0 to 7){
-                    var str = ""
-                    for(k <- 0 to 7){
-                        var x = peek(dut.io.output(t).mat(j*8+k)).toString()
-                        expect(dut.io.output(t).mat(j*8+k), std(t)(j)(k))
-                        str = str+x+" "
-                    } 
-                    println(str)
-                }
-
-            stop = true
-        }
-        
-    }
     
 }
 

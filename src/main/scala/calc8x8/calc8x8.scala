@@ -13,7 +13,7 @@ class PackedData(val w: Int) extends Bundle {
 }
 
 class RawData(val w: Int) extends Bundle {
-    val mat = Vec(64, SInt((w*2+6).W))
+    val mat = Vec(64, SInt((w*2+20).W))
 }
 
 class Calc8x8(val w: Int, val para_num: Int) extends Module{
@@ -133,10 +133,10 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
     // val conv_weight = RegInit(0.U.asTypeOf(new WeightData()))
 
     def clamp_18(x: SInt): SInt = {
-        // return x
-        val r = ((1<<17)-1).S(20.W)
-        val l = (-(1<<17)).S(20.W)
-        return Mux(x>=r, r, Mux(x<=l, l, x))
+        return x
+        // val r = ((1<<19)-1).S(20.W)
+        // val l = (-(1<<19)).S(20.W)
+        // return Mux(x>=r, r, Mux(x<=l, l, x))
         //return Mux((~x(18))&&x(17), ((1<<17)-1).S(18.W), Mux(x(18)&&(~x(17)), (-(1<<17)).S(18.W), x))
     }
 
@@ -149,8 +149,8 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
                     conv_weight(t).real(x) := clamp_18(__B(t)(i)(j))
                     x = x+1
                 } else if(i==3||(i!=4&&j==3)){
-                    val __Bx = Wire(SInt(18.W))
-                    val __Bix = Wire(SInt(18.W))
+                    val __Bx = Wire(SInt(StdPara.dsp_w.W))
+                    val __Bix = Wire(SInt(StdPara.dsp_w.W))
                     __Bx := clamp_18(__B(t)(i)(j))
                     __Bix := clamp_18(__Bi(t)(i)(j))
                     conv_weight(t).sbx(y) := ((__Bx+&__Bix)>>1.U)
@@ -206,6 +206,12 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
             io.valid_out := Cat(Seq.tabulate(para_num){
                 i => A(0).valid_out&io.mask(para_num-1-i)
             }) 
+        }
+        
+        is(CalcType.empty){
+            io.valid_out := io.valid_in
+            for(i <- 0 to 63)
+                io.output(0).mat(i) := io.input.mat(i)
         }
     }
 }

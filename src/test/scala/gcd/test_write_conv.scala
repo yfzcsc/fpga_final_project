@@ -55,7 +55,7 @@ class WriteConvTester(dut: WriteConvTestModule, std: Array[Array[Tuple2[Int, Int
     step(1)
     poke(dut.io.start, false.B)
     step(1)
-    for(i <- 0 to 300){
+    for(i <- 0 to 3000){
         var str = ""
         str = str+"["+peek(dut.io.valid_out)+"]"
         for(j <- 0 to 2){
@@ -77,16 +77,16 @@ class WriteConvSpec extends FlatSpec with Matchers {
 
     it should "WriteConv should pass" in {
         var (h, w) = (8, 8)
-        var in_chan = 8
+        var in_chan = 64
         var (begin_addr, max_addr, min_addr) = (990, 1010, 12)
         var (small_begin_addr, small_max_addr, small_min_addr) = (540, 600, 29)
         var bank_id_big = 0
         var bank_id_small = Array(1, 2, 3, 4)
-        var al = 1
-        var ar = 5
+        var al = 32
+        var ar = 63
 
         var std = Array.tabulate(10000, 3){
-            (i, j) => (0, 0)
+            (i, j) => (-1, 0)
         }
 
         def f(x: Int, L: Int, R: Int): Int = {
@@ -113,8 +113,8 @@ class WriteConvSpec extends FlatSpec with Matchers {
                 }
 
 
-        chisel3.iotesters.Driver(() => new WriteConvTestModule(10, 10, 6, 4, 
-            h, w, in_chan, begin_addr+al, max_addr, min_addr, small_begin_addr+al, small_min_addr, small_max_addr,
+        chisel3.iotesters.Driver(() => new WriteConvTestModule(10, 3, 6, 3, 
+            h, w, in_chan, f(begin_addr+al, min_addr, max_addr), max_addr, min_addr, f(small_begin_addr+al, small_min_addr, small_max_addr), small_min_addr, small_max_addr,
             bank_id_big, bank_id_small, al, ar
         )) { c =>
             new WriteConvTester(c, std)

@@ -36,17 +36,18 @@ trait GenAddressInterface{
 abstract class GenAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bundle with GenAddressInterface{
     val max_addr = UInt(addr_w.W) 
     val min_addr = UInt(addr_w.W) 
+    val dta_addr = UInt(addr_w.W)
     val now_addr = UInt(addr_w.W)
-    val cnt_ic = ACounter(h_w.W)
+    val cnt_ic = ACounter(c_w.W)
     val cnt_x = ACounter(h_w.W)
     val cnt_y = ACounter(h_w.W)
     val bank_id = UInt(id_w.W)
-    val block_size = UInt(c_w.W)
+    val block_size = UInt(addr_w.W)
     val column_size = UInt(addr_w.W)
     def clamp(addr: UInt): UInt = {
-        val nxt = Wire(UInt(addr_w.W))
+        val nxt = Wire(UInt(addr.getWidth.W))
         when(addr>max_addr){
-            nxt := addr-max_addr-1.U+min_addr
+            nxt := addr+dta_addr
         }.otherwise{
             nxt := addr
         }
@@ -62,6 +63,7 @@ abstract class GenAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bu
         cnt_x.set(x.cnt_x_end)
         cnt_y.set(x.cnt_y_end)
         bank_id := x.bank_id
+        dta_addr := -x.max_addr-1.U+x.min_addr
     }
     override def output(): Data = {
         return Address(now_addr, bank_id)
@@ -69,7 +71,7 @@ abstract class GenAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bu
 }
 
 class GenReadBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends GenAddress(addr_w, h_w, c_w, id_w){
-    val cnt_loop = ACounter(h_w.W)
+    val cnt_loop = ACounter((2*c_w).W)
     val cnt_ups = ACounter(1.W)
     val cnt_maxp = ACounter(1.W)
     val y_begin_addr = UInt(addr_w.W)
@@ -140,12 +142,12 @@ class GenReadBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends 
     }
 }
 
-class GenReadSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends GenAddress(addr_w, h_w, c_w, id_w){
+class GenReadSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int, big_w: Int) extends GenAddress(addr_w, h_w, c_w, id_w){
     val ano_bank_id = UInt(id_w.W) 
-    val cnt_invalid = ACounter(h_w.W)
+    val cnt_invalid = ACounter(big_w.W)
     val cnt_maxp = ACounter(1.W)
     val cnt_ups = ACounter(1.W)
-    val cnt_loop = ACounter(h_w.W)
+    val cnt_loop = ACounter((2*c_w).W)
     val cnt_swap = ACounter(1.W)
     val y_begin_addr = UInt(addr_w.W)
     val ic_begin_addr = UInt(addr_w.W)
@@ -211,14 +213,15 @@ class GenWriteSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) exten
     // a is the output_chan that it outputs,
     val a = UInt(c_w.W)
     val ano_bank_id = UInt(id_w.W) 
-    val cnt_swap = ACounter(1.W)
-    val y_begin_addr = UInt(h_w.W)
+    val cnt_swap = Bool()
+    val y_begin_addr = UInt(addr_w.W)
     override def go(): Unit = {
-        val nxt_addr = Wire(UInt(addr_w.W))
+        val nxt_addr = Wire(UInt((addr_w+1).W))
         nxt_addr := 0.U
         when(cnt_ic.inc()){
             when(cnt_y.inc()){
-                when(cnt_swap.inc()){
+                cnt_swap := ~cnt_swap
+                when(cnt_swap){
                     nxt_addr := now_addr+a
                     y_begin_addr := clamp(nxt_addr)
                 }.otherwise{
@@ -227,10 +230,10 @@ class GenWriteSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) exten
                 bank_id := ano_bank_id
                 ano_bank_id := bank_id
             }.otherwise{
-                nxt_addr := now_addr+a
+                nxt_addr := now_addr+&a
             }
         }.otherwise{
-            nxt_addr := now_addr+1.U
+            nxt_addr := now_addr+&1.U
         }
         now_addr := clamp(nxt_addr)
     }
@@ -240,18 +243,18 @@ class GenWriteSmallBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) exten
         a := x.a
         ano_bank_id := x.ano_bank_id
         y_begin_addr := x.begin_addr
-        cnt_swap.set(1.U)
+        cnt_swap := false.B
     }
 }
 
 class GenWriteBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends GenAddress(addr_w, h_w, c_w, id_w){
     val a = UInt(c_w.W) 
     override def go(): Unit = {
-        val nxt_addr = Wire(UInt(addr_w.W))
+        val nxt_addr = Wire(UInt((addr_w+1).W))
         when(cnt_ic.inc()){
-            nxt_addr := now_addr+a
+            nxt_addr := now_addr+&a
         }.otherwise{
-            nxt_addr := now_addr+1.U
+            nxt_addr := now_addr+&1.U
         }
         now_addr := clamp(nxt_addr)
     }
@@ -263,9 +266,9 @@ class GenWriteBigBankAddress(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends
 
 }
 
-class ReadGroup(addr_w: Int, h_w: Int, c_w: Int, id_w: Int) extends Bundle{
+class ReadGroup(addr_w: Int, h_w: Int, c_w: Int, id_w: Int, big_w: Int) extends Bundle{
     val big = new GenReadBigBankAddress(addr_w, h_w, c_w, id_w)
-    val small = Vec(4, new GenReadSmallBankAddress(addr_w, h_w, c_w, id_w))
+    val small = Vec(4, new GenReadSmallBankAddress(addr_w, h_w, c_w, id_w, big_w))
     def set(x: ReadJobs): Unit = {
         big.set(x.big)
         for(i <- 0 to 3)

@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 class AccumuRawData(val w: Int) extends Bundle{
-    val mat = Vec(64, SInt((w*2+12).W))
+    val mat = Vec(64, SInt((w*2+20).W))
 }
 
 class AccumuBundle(w: Int, addr_w: Int, bias_w: Int, para_num: Int) extends Bundle{
@@ -60,7 +60,7 @@ class Accumu(w: Int, addr_w: Int, bias_w: Int, para_num: Int) extends Module{
         when(io.valid_in.orR){
             for(t <- 0 to para_num-1)
                 for(i <- 0 to 63){
-                    r64(t).mat(i) := io.in_from_calc8x8(t).mat(i)+b64(t).mat(i)
+                    r64(t).mat(i) := io.in_from_calc8x8(t).mat(i)+&b64(t).mat(i)
                 }
             
             when(counter.ccnt===counter.cend){
