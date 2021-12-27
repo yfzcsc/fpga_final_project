@@ -89,9 +89,8 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
     
     val reg1 = RegInit(0.U.asTypeOf(new FirstTransInput(w+2)))
     val reg2 = RegInit(0.U.asTypeOf(new FinalTransInput(w+4)))
-    val _w3 = Wire(Vec(para_num, new TransOutput(w+StdPara.dsp_w+5)))
-    val w3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new TransOutput(w+StdPara.dsp_w+6)))))
-    val reg3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new FirstTransOutput(w+StdPara.dsp_w+7)))))
+    val w3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new TransOutput(w+StdPara.dsp_w+5)))))
+    val reg3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new FirstTransOutput(w+StdPara.dsp_w+6)))))
 
     _w3 := 0.U.asTypeOf(_w3)
     
@@ -305,21 +304,6 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
     valid_reg(10) := valid_reg(9)
     
     for(t <- 0 to para_num-1){
-        for(i <- 0 to 5){
-            for(j <- 0 to 5){
-                if(i!=3&&i!=4&&j!=3&&j!=4){
-                    w3(t).mat_real(g6(i, j)) := _w3(t).mat_real(g6(i, j))
-                } else if(i==3){
-                    w3(t).mat_real(g6(i, j)) := _w3(t).mat_real(g6(i, j))
-                    w3(t).mat_comp(g6(i, j)) := _w3(t).mat_comp(g6(i, j))
-                } else if(i!=4&&(j==3)){
-                    w3(t).mat_real(g6(i, j)) := _w3(t).mat_real(g6(i, j))
-                    w3(t).mat_comp(g6(i, j)) := _w3(t).mat_comp(g6(i, j))
-                } 
-            }
-        }
-    }
-    for(t <- 0 to para_num-1){
         var y = 0
         for(i <- 0 to 5){
             for(j <- 0 to 5){
@@ -331,8 +315,8 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
                     comp(t)(y).ax := reg2.mat_real(g6(i, j))
                     comp(t)(y).ay := reg2.mat_comp(j)
 
-                    _w3(t).mat_real(g6(i, j)) := comp(t)(y).x
-                    _w3(t).mat_comp(g6(i, j)) := comp(t)(y).y
+                    w3(t).mat_real(g6(i, j)) := comp(t)(y).x
+                    w3(t).mat_comp(g6(i, j)) := comp(t)(y).y
                     
                     y = y+1
                 } else if(i!=4&&j==3){
@@ -344,8 +328,8 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
                     comp(t)(y).ax := reg2.mat_real(g6(i, j))
                     comp(t)(y).ay := reg2.mat_comp(real_i)
 
-                    _w3(t).mat_real(g6(i, j)) := comp(t)(y).x
-                    _w3(t).mat_comp(g6(i, j)) := comp(t)(y).y
+                    w3(t).mat_real(g6(i, j)) := comp(t)(y).x
+                    w3(t).mat_comp(g6(i, j)) := comp(t)(y).y
 
                     y = y+1
                 }
