@@ -58,11 +58,11 @@ class Accumu(w: Int, addr_w: Int, bias_w: Int, para_num: Int) extends Module{
         
         io.valid_out := valid_out_reg
         when(io.valid_in.orR){
+            
             for(t <- 0 to para_num-1)
                 for(i <- 0 to 63){
                     r64(t).mat(i) := io.in_from_calc8x8(t).mat(i)+&b64(t).mat(i)
                 }
-            
             when(counter.ccnt===counter.cend){
                 valid_out_reg := 0.U
                 counter.ccnt := counter.ccnt-1.U

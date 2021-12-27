@@ -67,7 +67,7 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) exten
             val t = (1<<i)-1
             cache(~state)(t) := cache(~state)(0)
             for(j <- 0 to t-1)
-                cache(~state)(i) := cache(~state)(i+1)
+                cache(~state)(j) := cache(~state)(j+1)
         }
     }
     
@@ -137,7 +137,7 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) exten
             val t = (1<<i)-1
             cache(state)(t) := nxt_up
             for(j <- 0 to t-1)
-                cache(state)(i) := cache(state)(i+1)
+                cache(state)(j) := cache(state)(j+1)
         }
     }
     when(io.flag_job){

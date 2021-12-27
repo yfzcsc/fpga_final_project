@@ -179,7 +179,7 @@ class RAMGroup(w: Int, addr_w: Int, id_w: Int) extends Module{
 
     val big_typ = RegInit(0.U(1.W))
 
-    when(io.rd_addr1.addrs(0).bank_id===0.U){
+    when(io.rd_addr1.addrs(0).bank_id(0)){
         big_banks(0).addra := io.rd_addr1.addrs(0).addr
         big_banks(1).addra := io.rd_addr2.addrs(0).addr
         big_typ := 1.U
@@ -198,7 +198,7 @@ class RAMGroup(w: Int, addr_w: Int, id_w: Int) extends Module{
     }
 
     // magic
-    val typ = RegInit(VecInit(Seq.fill(2)(0.U(addr_w.W))))
+    val typ = RegInit(VecInit(Seq.fill(2)(0.U(id_w.W))))
     typ(0) := io.rd_addr1.addrs(2).bank_id
     typ(1) := io.rd_addr2.addrs(2).bank_id
 
@@ -220,54 +220,54 @@ class RAMGroup(w: Int, addr_w: Int, id_w: Int) extends Module{
 
 
     for(i <- 0 to 3){
-        when(io.rd_addr1.addrs(0).bank_id===0.U){
+        when(io.rd_addr1.addrs(0).bank_id(0)){
             small_banks(i).addra := MuxCase(0.U.asTypeOf(small_banks(i).addra), Seq.tabulate(4){
-                j => ((io.rd_addr1.addrs(2).bank_id===j.U) -> io.rd_addr1.addrs(get_which(i, j)).addr)
+                j => ((io.rd_addr1.addrs(2).bank_id(j)) -> io.rd_addr1.addrs(get_which(i, j)).addr)
             })
             small_banks(i+4).addra := MuxCase(0.U.asTypeOf(small_banks(i+4).addra), Seq.tabulate(4){
-                j => ((io.rd_addr2.addrs(2).bank_id===(j+4).U) -> io.rd_addr2.addrs(get_which(i, j)).addr)
+                j => ((io.rd_addr2.addrs(2).bank_id(j+4)) -> io.rd_addr2.addrs(get_which(i, j)).addr)
             })    
         }.otherwise{    
             small_banks(i).addra := MuxCase(0.U.asTypeOf(small_banks(i).addra), Seq.tabulate(4){
-                j => ((io.rd_addr2.addrs(2).bank_id===j.U) -> io.rd_addr2.addrs(get_which(i, j)).addr)
+                j => ((io.rd_addr2.addrs(2).bank_id(j)) -> io.rd_addr2.addrs(get_which(i, j)).addr)
             })
             small_banks(i+4).addra := MuxCase(0.U.asTypeOf(small_banks(i+4).addra), Seq.tabulate(4){
-                j => ((io.rd_addr1.addrs(2).bank_id===(j+4).U) -> io.rd_addr1.addrs(get_which(i, j)).addr)
+                j => ((io.rd_addr1.addrs(2).bank_id(j+4)) -> io.rd_addr1.addrs(get_which(i, j)).addr)
             })
         }
         when(big_typ===1.U){
             io.rd_small(0)(i) := MuxCase(0.U.asTypeOf(io.rd_small(0)(i)), Seq.tabulate(4){
-                j => ((typ(0)===j.U) -> small_banks(get_which_res(i, j)).douta.asTypeOf(new SmallBankReadData(w)))
+                j => ((typ(0)(j)) -> small_banks(get_which_res(i, j)).douta.asTypeOf(new SmallBankReadData(w)))
             })
             io.rd_small(1)(i) := MuxCase(0.U.asTypeOf(io.rd_small(1)(i)), Seq.tabulate(4){
-                j => ((typ(1)===(j+4).U) -> small_banks(get_which_res(i, j)+4).douta.asTypeOf(new SmallBankReadData(w)))
+                j => ((typ(1)(j+4)) -> small_banks(get_which_res(i, j)+4).douta.asTypeOf(new SmallBankReadData(w)))
             })
         }.otherwise{
             io.rd_small(1)(i) := MuxCase(0.U.asTypeOf(io.rd_small(1)(i)), Seq.tabulate(4){
-                j => ((typ(1)===j.U) -> small_banks(get_which_res(i, j)).douta.asTypeOf(new SmallBankReadData(w)))
+                j => ((typ(1)(j)) -> small_banks(get_which_res(i, j)).douta.asTypeOf(new SmallBankReadData(w)))
             })
             io.rd_small(0)(i) := MuxCase(0.U.asTypeOf(io.rd_small(0)(i)), Seq.tabulate(4){
-                j => ((typ(0)===(j+4).U) -> small_banks(get_which_res(i, j)+4).douta.asTypeOf(new SmallBankReadData(w)))
+                j => ((typ(0)(j+4)) -> small_banks(get_which_res(i, j)+4).douta.asTypeOf(new SmallBankReadData(w)))
             })
         }
     }
 
 
-    when(io.wr_addr.addrs(0).bank_id===0.U){
-        big_banks(0).addrb := io.wr_addr.addrs(0).addr
-        big_banks(0).dinb := io.to_bigbank.asUInt
+    big_banks(1).addrb := io.wr_addr.addrs(0).addr
+    big_banks(1).dinb := io.to_bigbank.asUInt
+    big_banks(0).addrb := io.wr_addr.addrs(0).addr
+    big_banks(0).dinb := io.to_bigbank.asUInt
+    when(io.wr_addr.addrs(0).bank_id(0)){
         big_banks(0).web := io.wr_valid_in
     }.otherwise{
-        big_banks(1).addrb := io.wr_addr.addrs(0).addr
-        big_banks(1).dinb := io.to_bigbank.asUInt
         big_banks(1).web := io.wr_valid_in
     }
     for(i <- 0 to 3){
-        when(io.wr_addr.addrs(1).bank_id===(i*2).U){
-            small_banks(i*2).addrb := io.wr_addr.addrs(1).addr
-            small_banks(i*2).dinb := io.to_smallbank(0).asUInt
-            small_banks(i*2+1).addrb := io.wr_addr.addrs(2).addr
-            small_banks(i*2+1).dinb := io.to_smallbank(1).asUInt
+        small_banks(i*2).addrb := io.wr_addr.addrs(1).addr
+        small_banks(i*2).dinb := io.to_smallbank(0).asUInt
+        small_banks(i*2+1).addrb := io.wr_addr.addrs(2).addr
+        small_banks(i*2+1).dinb := io.to_smallbank(1).asUInt
+        when(io.wr_addr.addrs(1).bank_id(i*2)){
             small_banks(i*2).web := io.wr_valid_in
             small_banks(i*2+1).web := io.wr_valid_in
         }    

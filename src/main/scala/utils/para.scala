@@ -358,8 +358,8 @@ object GenAllPara{
         ret.wr_height = wr_height
         ret.in_chan = in_chan
         ret.out_chan = out_chan
-        ret.bank_id_big = Array(0, 1)
-        ret.bank_id_small = Array(Array(3, 0, 1, 2), Array(7, 4, 5, 6))
+        ret.bank_id_big = Array(1<<0, 1<<1)
+        ret.bank_id_small = Array(Array(1<<3, 1<<0, 1<<1, 1<<2), Array(1<<7, 1<<4, 1<<5, 1<<6))
         ret.para_num = para_num
         ret.big_begin_addr = big_begin_addr
         ret.big_max_addr = big_max_addr
@@ -398,7 +398,7 @@ object StdPara{
     val h_w = 3
     val addr_w = 10
     val c_w = 6
-    val id_w = 3
+    val id_w = 8
     val para_num = 4
     val mask = (1<<para_num)-1
     val dsp_w = 18

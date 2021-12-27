@@ -91,8 +91,6 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
     val reg2 = RegInit(0.U.asTypeOf(new FinalTransInput(w+4)))
     val w3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new TransOutput(w+StdPara.dsp_w+5)))))
     val reg3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new FirstTransOutput(w+StdPara.dsp_w+6)))))
-
-    _w3 := 0.U.asTypeOf(_w3)
     
     
     def g6(x: Int, y: Int): Int = {
@@ -372,7 +370,7 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
                             real(t)(x).flag := CoreType.calcMult
                             real(t)(x).in_b := reg2.mat_real(g6(i, j))
                             real(t)(x).w_a := io.weight(t).real(x)
-                            _w3(t).mat_real(g6(i, j)) := real(t)(x).result
+                            w3(t).mat_real(g6(i, j)) := real(t)(x).result
                             x = x+1
                         }
                     }
