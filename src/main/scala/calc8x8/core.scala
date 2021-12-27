@@ -14,9 +14,9 @@ object CoreType extends ChiselEnum {
 class Core extends Module{
     val io = IO(new Bundle{
         val w_a = Input(SInt(StdPara.dsp_w.W))
-        val in_b = Input(SInt(24.W))
+        val in_b = Input(SInt(20.W))
         val flag = Input(CoreType())
-        val result = Output(SInt(44.W))
+        val result = Output(SInt(40.W))
     })
     
     val dsp48 = Module(new DSP48())
@@ -43,8 +43,8 @@ class Core extends Module{
 class DSP48 extends Module{
     val io = IO(new Bundle{
         val in_a = Input(SInt(StdPara.dsp_w.W))
-        val in_b = Input(SInt(24.W))
-        val out = Output(SInt(44.W))
+        val in_b = Input(SInt(20.W))
+        val out = Output(SInt(40.W))
     })
     /*
     val M = Module(new ip_dsp48).io
@@ -61,13 +61,13 @@ class ComplexCore extends Module{
         val rbx = Input(Bool())
         val bx = Input(SInt(StdPara.dsp_w.W))
         val by = Input(SInt(StdPara.dsp_w.W))
-        val ax = Input(SInt(24.W))
-        val ay = Input(SInt(24.W))
-        val x = Output(SInt(44.W))
-        val y = Output(SInt(44.W))
+        val ax = Input(SInt(20.W))
+        val ay = Input(SInt(20.W))
+        val x = Output(SInt(40.W))
+        val y = Output(SInt(40.W))
     })
-    val _ax = RegNext(io.ax, 0.S(24.W))
-    val _ay = RegNext(io.ay, 0.S(24.W))
+    val _ax = RegNext(io.ax, 0.S(20.W))
+    val _ay = RegNext(io.ay, 0.S(20.W))
     val _bx = RegNext(io.bx, 0.S(StdPara.dsp_w.W))
     val _by = RegNext(io.by, 0.S(StdPara.dsp_w.W))
     val w = RegNext((io.ay<<(1.U))*io.sbx+&Mux(io.rbx, io.ay, 0.S), 0.S)

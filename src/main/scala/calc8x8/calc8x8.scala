@@ -13,7 +13,7 @@ class PackedData(val w: Int) extends Bundle {
 }
 
 class RawData(val w: Int) extends Bundle {
-    val mat = Vec(64, SInt((w*2+20).W))
+    val mat = Vec(64, SInt((w*2+12).W))
 }
 
 class Calc8x8(val w: Int, val para_num: Int) extends Module{

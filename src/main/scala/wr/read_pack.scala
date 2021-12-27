@@ -59,7 +59,16 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) exten
             io.output.up(9) := io.from_small(state)(3).data(1) 
         }
     }.otherwise{
-        io.output.up := cache(~state)(cnt_ic.ccnt)
+        io.output.up := cache(~state)(0)
+    }
+
+    for(i <- 1 to 6){
+        when(if(i==6) cnt_ic.cend(i-1) else ~cnt_ic.cend(i)&&cnt_ic.cend(i-1)){
+            val t = (1<<i)-1
+            cache(~state)(t) := cache(~state)(0)
+            for(j <- 0 to t-1)
+                cache(~state)(i) := cache(~state)(i+1)
+        }
     }
     
     when(cnt_y.ccnt===cnt_y.cend){
@@ -123,7 +132,14 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) exten
     }.otherwise{
         nxt_up(9) := io.from_small(state)(3).data(7) 
     }
-    cache(state)(cnt_ic.ccnt) := nxt_up
+    for(i <- 1 to 6){
+        when(if(i==6) cnt_ic.cend(i-1) else ~cnt_ic.cend(i)&&cnt_ic.cend(i-1)){
+            val t = (1<<i)-1
+            cache(state)(t) := nxt_up
+            for(j <- 0 to t-1)
+                cache(state)(i) := cache(state)(i+1)
+        }
+    }
     when(io.flag_job){
         cnt_x.set(io.job.cnt_x_end)
         cnt_y.set(io.job.cnt_y_end)
