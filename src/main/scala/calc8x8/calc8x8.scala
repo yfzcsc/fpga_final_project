@@ -133,10 +133,11 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
     // val conv_weight = RegInit(0.U.asTypeOf(new WeightData()))
 
     def clamp_18(x: SInt): SInt = {
-        return x
-        // val r = ((1<<19)-1).S(20.W)
-        // val l = (-(1<<19)).S(20.W)
-        // return Mux(x>=r, r, Mux(x<=l, l, x))
+        // return x
+        val xx = StdPara.dsp_w
+        val r = ((1<<(xx-1))-1).S(20.W)
+        val l = (-(1<<(xx-1))).S(20.W)
+        return Mux(x>=r, r, Mux(x<=l, l, x))
         //return Mux((~x(18))&&x(17), ((1<<17)-1).S(18.W), Mux(x(18)&&(~x(17)), (-(1<<17)).S(18.W), x))
     }
 

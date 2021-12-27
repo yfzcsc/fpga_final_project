@@ -25,7 +25,7 @@ class LeakyReLUTester(dut: Calc8x8) extends PeekPokeTester(dut) {
         }
     }
 
-    poke(dut.io.flag, 0)
+    poke(dut.io.flag, 1)
     poke(dut.io.mask, 1)
     poke(dut.io.valid_in, true)
     var stop = false

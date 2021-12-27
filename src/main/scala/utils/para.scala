@@ -252,6 +252,14 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int, big
         rs.job := ReadSwitchType.toCopy
         return rs
     }
+    
+
+    
+    def set_mult_switch(rs: ReadSwitchBundle): Bundle = {
+        rs.flag_job := true.B
+        rs.job := ReadSwitchType.toMult2
+        return rs
+    }
 
     def set_ups_switch(rs: ReadSwitchBundle): Bundle = {
         rs.flag_job := true.B
@@ -302,7 +310,7 @@ class GenAllPara(val addr_w: Int, val h_w: Int, val c_w: Int, val id_w: Int, big
             wr_small_begin_addr, wr_small_min_addr, wr_small_max_addr,
             bank_id_big(1), bank_id_small1, al, ar
         )
-        wr.job.out_chan := (out_chan-1).U
+        wr.job.out_chan := (ar-al).U
         return wr
     }
 
@@ -393,7 +401,7 @@ object StdPara{
     val id_w = 3
     val para_num = 4
     val mask = (1<<para_num)-1
-    val dsp_w = 20
+    val dsp_w = 18
 
     val big_global_addr = big_global_size-1
     val small_global_addr = small_global_size-1
