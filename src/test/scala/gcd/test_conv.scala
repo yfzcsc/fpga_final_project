@@ -363,6 +363,7 @@ class ConvTester(dut: Global1, _w: Int, h_w: Int, c_w: Int, id_w: Int, big_w: In
 
 
 class ConvSpec extends FlatSpec with Matchers {
+    /*
     it should "Conv should pass" in {
         val w = 16
         val h_w = 16
@@ -375,5 +376,5 @@ class ConvSpec extends FlatSpec with Matchers {
         chisel3.iotesters.Driver(() => new Global1(w, h_w, c_w, id_w, big_w, addr_w, bias_w, num)) { c =>
             new ConvTester(c, w, h_w, c_w, id_w, big_w, addr_w, bias_w, num)
         } should be (true)
-    }
+    }*/
 }

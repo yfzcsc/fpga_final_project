@@ -101,6 +101,13 @@ class weight0(w: Int, addr_w: Int) extends BlackBox{
 class bias0(w: Int, addr_w: Int) extends BlackBox{
     val io = IO(new SinglePortROM(w, addr_w))
 }
+class weight0_2(w: Int, addr_w: Int) extends BlackBox{
+    val io = IO(new SinglePortROM(w, addr_w))
+}
+
+class bias0_2(w: Int, addr_w: Int) extends BlackBox{
+    val io = IO(new SinglePortROM(w, addr_w))
+}
 
 class RAMGroupBundle(w: Int, addr_w: Int, id_w: Int) extends Bundle{
     val rd_valid_in = Input(Bool())
@@ -118,7 +125,7 @@ class RAMGroupBundle(w: Int, addr_w: Int, id_w: Int) extends Bundle{
 class RAMGroup(w: Int, addr_w: Int, id_w: Int) extends Module{
     val io = IO(new RAMGroupBundle(w, addr_w, id_w))
 
-    val reg_valid = RegNext(io.rd_valid_in, 0.U)
+    val reg_valid = RegNext(RegNext(io.rd_valid_in, 0.U), 0.U)
     io.rd_valid_out := reg_valid
     io.rd_big := 0.U.asTypeOf(io.rd_big)
     io.rd_small := 0.U.asTypeOf(io.rd_small)
@@ -177,25 +184,11 @@ class RAMGroup(w: Int, addr_w: Int, id_w: Int) extends Module{
     small_banks(6) = TrueDualPortWire(a_small_bank6.io, StdPara.small_bank_w, StdPara.small_bank_addr_w)
     small_banks(7) = TrueDualPortWire(a_small_bank7.io, StdPara.small_bank_w, StdPara.small_bank_addr_w)
 
-    val big_typ = RegInit(0.U(1.W))
+    big_banks(0).addra := io.rd_addr1.addrs(0).addr
+    big_banks(1).addra := io.rd_addr2.addrs(0).addr
 
-    when(io.rd_addr1.addrs(0).bank_id(0)){
-        big_banks(0).addra := io.rd_addr1.addrs(0).addr
-        big_banks(1).addra := io.rd_addr2.addrs(0).addr
-        big_typ := 1.U
-    }.otherwise{
-        big_banks(1).addra := io.rd_addr1.addrs(0).addr
-        big_banks(0).addra := io.rd_addr2.addrs(0).addr
-        big_typ := 0.U
-    }
-
-    when(big_typ===1.U){
-        io.rd_big(0) := big_banks(0).douta.asTypeOf(new BigBankReadData(w))
-        io.rd_big(1) := big_banks(1).douta.asTypeOf(new BigBankReadData(w))
-    }.otherwise{
-        io.rd_big(1) := big_banks(0).douta.asTypeOf(new BigBankReadData(w))
-        io.rd_big(0) := big_banks(1).douta.asTypeOf(new BigBankReadData(w))
-    }
+    io.rd_big(0) := RegNext(big_banks(0).douta.asTypeOf(new BigBankReadData(w)), 0.U.asTypeOf(new BigBankReadData(w)))
+    io.rd_big(1) := RegNext(big_banks(1).douta.asTypeOf(new BigBankReadData(w)), 0.U.asTypeOf(new BigBankReadData(w)))
 
     // magic
     val typ = RegInit(VecInit(Seq.fill(2)(0.U(id_w.W))))
@@ -220,36 +213,24 @@ class RAMGroup(w: Int, addr_w: Int, id_w: Int) extends Module{
 
 
     for(i <- 0 to 3){
-        when(io.rd_addr1.addrs(0).bank_id(0)){
-            small_banks(i).addra := MuxCase(0.U.asTypeOf(small_banks(i).addra), Seq.tabulate(4){
-                j => ((io.rd_addr1.addrs(2).bank_id(j)) -> io.rd_addr1.addrs(get_which(i, j)).addr)
-            })
-            small_banks(i+4).addra := MuxCase(0.U.asTypeOf(small_banks(i+4).addra), Seq.tabulate(4){
-                j => ((io.rd_addr2.addrs(2).bank_id(j+4)) -> io.rd_addr2.addrs(get_which(i, j)).addr)
-            })    
-        }.otherwise{    
-            small_banks(i).addra := MuxCase(0.U.asTypeOf(small_banks(i).addra), Seq.tabulate(4){
-                j => ((io.rd_addr2.addrs(2).bank_id(j)) -> io.rd_addr2.addrs(get_which(i, j)).addr)
-            })
-            small_banks(i+4).addra := MuxCase(0.U.asTypeOf(small_banks(i+4).addra), Seq.tabulate(4){
-                j => ((io.rd_addr1.addrs(2).bank_id(j+4)) -> io.rd_addr1.addrs(get_which(i, j)).addr)
-            })
-        }
-        when(big_typ===1.U){
-            io.rd_small(0)(i) := MuxCase(0.U.asTypeOf(io.rd_small(0)(i)), Seq.tabulate(4){
-                j => ((typ(0)(j)) -> small_banks(get_which_res(i, j)).douta.asTypeOf(new SmallBankReadData(w)))
-            })
-            io.rd_small(1)(i) := MuxCase(0.U.asTypeOf(io.rd_small(1)(i)), Seq.tabulate(4){
-                j => ((typ(1)(j+4)) -> small_banks(get_which_res(i, j)+4).douta.asTypeOf(new SmallBankReadData(w)))
-            })
-        }.otherwise{
-            io.rd_small(1)(i) := MuxCase(0.U.asTypeOf(io.rd_small(1)(i)), Seq.tabulate(4){
-                j => ((typ(1)(j)) -> small_banks(get_which_res(i, j)).douta.asTypeOf(new SmallBankReadData(w)))
-            })
-            io.rd_small(0)(i) := MuxCase(0.U.asTypeOf(io.rd_small(0)(i)), Seq.tabulate(4){
-                j => ((typ(0)(j+4)) -> small_banks(get_which_res(i, j)+4).douta.asTypeOf(new SmallBankReadData(w)))
-            })
-        }
+        small_banks(i).addra := MuxCase(0.U.asTypeOf(small_banks(i).addra), Seq.tabulate(4){
+            j => ((io.rd_addr1.addrs(2).bank_id(j)) -> io.rd_addr1.addrs(get_which(i, j)).addr)
+        })
+        small_banks(i+4).addra := MuxCase(0.U.asTypeOf(small_banks(i+4).addra), Seq.tabulate(4){
+            j => ((io.rd_addr2.addrs(2).bank_id(j+4)) -> io.rd_addr2.addrs(get_which(i, j)).addr)
+        })   
+    }
+    for(i <- 0 to 3){
+        val x0 = Wire(new SmallBankReadData(w))
+        val x1 = Wire(new SmallBankReadData(w))
+        x0 := MuxCase(0.U.asTypeOf(new SmallBankReadData(w)), Seq.tabulate(4){
+            j => ((typ(0)(j)) -> small_banks(get_which_res(i, j)).douta.asTypeOf(new SmallBankReadData(w)))
+        })
+        x1 := MuxCase(0.U.asTypeOf(new SmallBankReadData(w)), Seq.tabulate(4){
+            j => ((typ(1)(j+4)) -> small_banks(get_which_res(i, j)+4).douta.asTypeOf(new SmallBankReadData(w)))
+        })
+        io.rd_small(0)(i) := RegNext(x0, 0.U.asTypeOf(new SmallBankReadData(w)))
+        io.rd_small(1)(i) := RegNext(x1, 0.U.asTypeOf(new SmallBankReadData(w)))
     }
 
 
@@ -297,32 +278,24 @@ class ROMWeight(para_num: Int) extends Module{
     val io = IO(new ROMWeightBundle(para_num))
     val rom = Module(new weight0(para_num*StdPara.weight_w, StdPara.weight_addr_w)).io
     rom.clka := clock
-    rom.addra := io.addr
+    rom.addra := RegNext(io.addr, 0.U)
     io.out := rom.douta.asTypeOf(Vec(para_num, Vec(9, SInt(16.W))))
 }
 
 
 class ROMHalfBias(para_num: Int) extends Module{
     val io = IO(new ROMBiasBundle(para_num))
-    val rom = Module(new bias0(2*para_num*StdPara.bias_w, StdPara.bias_addr_w)).io
+    val rom = Module(new bias0_2(para_num*StdPara.bias_w, StdPara.bias_addr_w)).io
     rom.clka := clock
-    rom.addra := io.addr >> 1.U
-    val vec = Wire(Vec(2*para_num, SInt(StdPara.bias_w.W)))
-    val flag = RegNext(io.addr(0), false.B)
-    vec := rom.douta.asTypeOf(Vec(2*para_num, SInt(StdPara.bias_w.W)))
-    for(i <- 0 to para_num-1)
-        io.out(i) := Mux(flag, vec(i+para_num), vec(i))
+    rom.addra := io.addr
+    io.out := rom.douta.asTypeOf(Vec(para_num, SInt(StdPara.bias_w.W)))
 
 }
 
 class ROMHalfWeight(para_num: Int) extends Module{
     val io = IO(new ROMWeightBundle(para_num))
-    val rom = Module(new weight0(2*para_num*StdPara.weight_w, StdPara.weight_addr_w)).io
+    val rom = Module(new weight0_2(para_num*StdPara.weight_w, StdPara.weight_addr_w)).io
     rom.clka := clock
-    rom.addra := io.addr >> 1.U
-    val vec = Wire(Vec(2*para_num, Vec(9, SInt(16.W))))
-    vec := rom.douta.asTypeOf(Vec(2*para_num, Vec(9, SInt(16.W))))
-    val flag = RegNext(io.addr(0), false.B)
-    for(i <- 0 to para_num-1)
-        io.out(i) := Mux(flag, vec(i+para_num), vec(i))
+    rom.addra := RegNext(io.addr, 0.U)
+    io.out := rom.douta.asTypeOf(Vec(para_num, Vec(9, SInt(16.W))))
 }

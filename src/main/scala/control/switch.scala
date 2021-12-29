@@ -50,6 +50,13 @@ class ReadSwitch(val w: Int, val h_w: Int, val c_w: Int, val para_num: Int) exte
     io.to_multmap := 0.U.asTypeOf(io.to_multmap)
     
     io.to_calc8x8 := io.from
+    cache := io.from.mat 
+    for(ii <- 0 to 1)
+        for(jj <- 0 to 1)
+            for(i <- 0 to 3)
+                for(j <- 0 to 3)
+                    io.to_multmap(ii*2+jj).real(i*4+j) := cache((i+ii*4)*8+(j+jj*4))
+                
     when(io.flag_job){
         job_type := io.job
         ups_state := false.B
@@ -71,13 +78,6 @@ class ReadSwitch(val w: Int, val h_w: Int, val c_w: Int, val para_num: Int) exte
             is(ReadSwitchType.toMult2){
                 when(state){                
                     io.valid_out_calc8x8 := true.B
-                    for(ii <- 0 to 1)
-                        for(jj <- 0 to 1)
-                            for(i <- 0 to 3)
-                                for(j <- 0 to 3)
-                                    io.to_multmap(ii*2+jj).real(i*4+j) := cache((i+ii*4)*8+(j+jj*4))
-                }.otherwise{
-                    cache := io.from.mat
                 }
                 state := ~state
             }

@@ -13,7 +13,7 @@ class PackedData(val w: Int) extends Bundle {
 }
 
 class RawData(val w: Int) extends Bundle {
-    val mat = Vec(64, SInt((w*2+12).W))
+    val mat = Vec(64, SInt((w*2+4).W))
 }
 
 class Calc8x8(val w: Int, val para_num: Int) extends Module{
@@ -90,10 +90,10 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
             _B(t)(1)(j) := w0a2+&b_t_1_j
             _B(t)(2)(j) := w0a2-&b_t_1_j
             _B(t)(3)(j) := w0m2
-            _B(t)(4)(j) := w0m2
+            // _B(t)(4)(j) := w0m2
             _B(t)(5)(j) := RegNext(B(t)(2)(j), 0.S)
             _Bi(t)(3)(j) := b_t_1_j
-            _Bi(t)(4)(j) := -b_t_1_j
+            // _Bi(t)(4)(j) := -b_t_1_j
         }
 
     
@@ -101,7 +101,7 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
     val __Bi = RegInit(0.U.asTypeOf(Vec(para_num, Vec(6, Vec(6, SInt(20.W))))))
 
     for(t <- 0 to para_num-1)
-        for(i <- 0 to 5){
+        for(i <- 0 to 5)if(i!=4){
 
             
             val w0m2 = RegNext(_B(t)(i)(0)-&_B(t)(i)(2), 0.S)
@@ -115,21 +115,26 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
             __B(t)(i)(1) := w0a2+&b_t_i_1
             __B(t)(i)(2) := w0a2-&b_t_i_1
             __B(t)(i)(3) := w0m2-&bi_t_i_1
-            __B(t)(i)(4) := w0m2+&bi_t_i_1
+            if(i==3)
+                __B(t)(i)(4) := w0m2+&bi_t_i_1
             __B(t)(i)(5) := RegNext(_B(t)(i)(2), 0.S)
 
             val cw0m2 = RegNext(_Bi(t)(i)(0)-&_Bi(t)(i)(2), 0.S)
             val cw0a2 = RegNext(_Bi(t)(i)(0)+&_Bi(t)(i)(2), 0.S)
 
-            __Bi(t)(i)(0) := RegNext(_Bi(t)(i)(0), 0.S)
-            __Bi(t)(i)(1) := cw0a2+&bi_t_i_1
-            __Bi(t)(i)(2) := cw0a2-&bi_t_i_1
             __Bi(t)(i)(3) := cw0m2+&b_t_i_1
-            __Bi(t)(i)(4) := cw0m2-&b_t_i_1
-            __Bi(t)(i)(5) := RegNext(_Bi(t)(i)(2), 0.S)
+            if(i==3){
+                __Bi(t)(i)(0) := RegNext(_Bi(t)(i)(0), 0.S)
+                __Bi(t)(i)(1) := cw0a2+&bi_t_i_1
+                __Bi(t)(i)(2) := cw0a2-&bi_t_i_1
+                __Bi(t)(i)(4) := cw0m2-&b_t_i_1
+                __Bi(t)(i)(5) := RegNext(_Bi(t)(i)(2), 0.S)    
+            }
+            
         }
 
-    val conv_weight = Wire(Vec(para_num, new WeightData()))
+    // val conv_weight = Wire(Vec(para_num, new WeightData()))
+    val conv_weight = RegInit(0.U.asTypeOf(Vec(para_num, new WeightData())))
     // val conv_weight = RegInit(0.U.asTypeOf(new WeightData()))
 
     def clamp_18(x: SInt): SInt = {
@@ -147,11 +152,14 @@ class Calc8x8(val w: Int, val para_num: Int) extends Module{
         for(i <- 0 to 5){
             for(j <- 0 to 5){
                 if(i!=3&&i!=4&&j!=3&&j!=4){
-                    conv_weight(t).real(x) := clamp_18(__B(t)(i)(j))
+                    conv_weight(t).real(x) := RegNext(clamp_18(__B(t)(i)(j)), 0.S(StdPara.dsp_w.W))
+                    // conv_weight(t).real(x) := clamp_18(__B(t)(i)(j))
                     x = x+1
                 } else if(i==3||(i!=4&&j==3)){
-                    val __Bx = Wire(SInt(StdPara.dsp_w.W))
-                    val __Bix = Wire(SInt(StdPara.dsp_w.W))
+                    val __Bx = RegInit(0.S(StdPara.dsp_w.W))
+                    val __Bix = RegInit(0.S(StdPara.dsp_w.W))
+                    // val __Bx = Wire(SInt(StdPara.dsp_w.W))
+                    // val __Bix = Wire(SInt(StdPara.dsp_w.W))
                     __Bx := clamp_18(__B(t)(i)(j))
                     __Bix := clamp_18(__Bi(t)(i)(j))
                     conv_weight(t).sbx(y) := ((__Bx+&__Bix)>>1.U)

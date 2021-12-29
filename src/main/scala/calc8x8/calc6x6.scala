@@ -69,7 +69,6 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
     
     for(t <- 0 to para_num-1)
         for(i <- 0 to 15){
-            real(t)(i).flag := 0.U.asTypeOf(real(t)(i).flag)
             real(t)(i).w_a := 0.U.asTypeOf(real(t)(i).w_a)
             real(t)(i).in_b := 0.U.asTypeOf(real(t)(i).in_b)
         }
@@ -89,8 +88,8 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
     
     val reg1 = RegInit(0.U.asTypeOf(new FirstTransInput(w+2)))
     val reg2 = RegInit(0.U.asTypeOf(new FinalTransInput(w+4)))
-    val w3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new TransOutput(w+StdPara.dsp_w+5)))))
-    val reg3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new FirstTransOutput(w+StdPara.dsp_w+6)))))
+    val w3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new TransOutput(w+StdPara.dsp_w+4)))))
+    val reg3 = RegInit(VecInit(Seq.fill(para_num)(0.U.asTypeOf(new FirstTransOutput(w+StdPara.dsp_w+5)))))
     
     
     def g6(x: Int, y: Int): Int = {
@@ -157,8 +156,13 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
             w24 := in.mat_real(g6(i, 2))+&in.mat_real(g6(i, 4))
             w2m4 := in.mat_real(g6(i, 4))-&in.mat_real(g6(i, 2))
             if(i>=3&&i<=4){
-                val c13 = RegInit(0.S((in.mat_comp(g6(i-3, 3)).getWidth+1).W))
-                c13 := in.mat_comp(g6(i-3, 3))-&in.mat_comp(g6(i-3, 1))
+                val c13 = RegInit(0.S((in.mat_comp(g6(1, 3)).getWidth+1).W))
+                if(i==3){
+                    c13 := in.mat_comp(g6(1, 1))-&in.mat_comp(g6(1, 3))
+                } else {
+                    c13 := in.mat_comp(g6(1, 3))-&in.mat_comp(g6(1, 1))
+                }
+                
                 reg2.mat_real(g6(i, 3)) := w2m4-&c13
                 reg2.mat_real(g6(i, 4)) := w2m4+&c13
             } else {
@@ -284,9 +288,10 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
         }
     }
 
-    val valid_reg = RegInit(VecInit(Seq.fill(11)(false.B)))
+    val valid_reg = RegInit(VecInit(Seq.fill(13)(false.B)))
     
-    first_trans_input(io.input)
+    // first_trans_input(io.input)
+    first_trans_input(RegNext(RegNext(io.input, 0.U.asTypeOf(io.input)), 0.U.asTypeOf(io.input)))
     final_trans_input(reg1)
     for(t <- 0 to para_num-1)
         first_trans_output(reg3(t), w3(t))
@@ -300,6 +305,8 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
     valid_reg(8) := valid_reg(7)
     valid_reg(9) := valid_reg(8)
     valid_reg(10) := valid_reg(9)
+    valid_reg(11) := valid_reg(10)
+    valid_reg(12) := valid_reg(11)
     
     for(t <- 0 to para_num-1){
         var y = 0
@@ -337,7 +344,7 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
     switch(io.flag){
         is(CalcType.leakyReLU){
             for(i <- 0 to 15){
-                real(0)(i).flag := CoreType.leakyReLU
+                real(0)(i).w_a := Mux(io.input.mat((i/4)*6+(i%4))(w-1), 6554.S, 32768.S)
                 real(0)(i).in_b := io.input.mat((i/4)*6+(i%4))
                 io.output(0).mat(i) := real(0)(i).result
             }
@@ -346,7 +353,6 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
 
         is(CalcType.calcMult){
             for(i <- 0 to 15){
-                real(0)(i).flag := CoreType.calcMult
                 real(0)(i).in_b := io.input.mat((i/4)*6+(i%4))
                 real(0)(i).w_a := io.weight(0).real(i)
                 io.output(0).mat(i) := real(0)(i).result
@@ -367,7 +373,6 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
                 for(i <- 0 to 5){
                     for(j <- 0 to 5){
                         if(i!=3&&i!=4&&j!=3&&j!=4){
-                            real(t)(x).flag := CoreType.calcMult
                             real(t)(x).in_b := reg2.mat_real(g6(i, j))
                             real(t)(x).w_a := io.weight(t).real(x)
                             w3(t).mat_real(g6(i, j)) := real(t)(x).result
@@ -376,7 +381,8 @@ class Calc6x6(val w: Int, val para_num: Int) extends Module{
                     }
                 }
             }
-            io.valid_out := valid_reg(10)
+            io.valid_out := valid_reg(12)
+            // io.valid_out := valid_reg(10)
             
         }
     }

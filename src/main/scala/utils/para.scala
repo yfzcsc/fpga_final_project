@@ -392,15 +392,16 @@ object StdPara{
     val small_global_size = 512
     val bias_w = 36
     val weight_w = 144
-    val bias_addr_w = 7
-    val weight_addr_w = 12
+    val bias_addr_w = 8
+    val weight_addr_w = 13
     val big_w = 16
     val h_w = 3
     val addr_w = 10
     val c_w = 6
     val id_w = 8
-    val para_num = 4
+    val para_num = 2
     val mask = (1<<para_num)-1
+    val rd_para_num = 4
     val dsp_w = 18
 
     val big_global_addr = big_global_size-1

@@ -4,39 +4,17 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.ChiselEnum
 
-object CoreType extends ChiselEnum {
-    val ض   = Value(0.U)
-    val leakyReLU = Value(1.U)
-    val calcMult = Value(2.U)
-}
-
-
 class Core extends Module{
     val io = IO(new Bundle{
         val w_a = Input(SInt(StdPara.dsp_w.W))
         val in_b = Input(SInt(20.W))
-        val flag = Input(CoreType())
         val result = Output(SInt(40.W))
     })
     
     val dsp48 = Module(new DSP48())
     dsp48.io.in_b := RegNext(io.in_b, 0.S)
-    val r_in_a = RegInit(0.S(StdPara.dsp_w.W))
-    dsp48.io.in_a := r_in_a
+    dsp48.io.in_a := RegNext(io.w_a, 0.S)
     io.result := RegNext(dsp48.io.out, 0.S)
-    
-    switch(io.flag){
-        is(CoreType.leakyReLU){
-            when(io.in_b(io.in_b.getWidth-1)){
-                r_in_a := 6554.S
-            }.otherwise{
-                r_in_a := 32768.S
-            }
-        }
-        is(CoreType.calcMult){
-            r_in_a := io.w_a
-        }
-    }
 }
 
 

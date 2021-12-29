@@ -27,8 +27,8 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) exten
     val cnt_x = RegInit(0.U.asTypeOf(ACounter(h_w.W)))
     val cnt_y = RegInit(0.U.asTypeOf(ACounter(h_w.W)))
 
-    io.valid_out := false.B
-    io.output := 0.U.asTypeOf(io.output)
+    val output_reg = Wire((new PackedData(w)))
+    io.output := output_reg
 
     
     val state = RegInit(0.U(1.W))
@@ -36,84 +36,99 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) exten
     def copy64(): Unit = {
         for(i <- 0 to 7){
             for(j <- 1 to 6)
-                io.output.mat(i*8+j) := io.from_big(state).data(i*6+j-1)
-            io.output.mat(i*8+0) := io.from_small(state)(1).data(i)
-            io.output.mat(i*8+7) := io.from_small(state)(2).data(i)
+                output_reg.mat(i*8+j) := io.from_big(state).data(i*6+j-1)
+            output_reg.mat(i*8+0) := io.from_small(state)(1).data(i)
+            output_reg.mat(i*8+7) := io.from_small(state)(2).data(i)
         }
     }
 
     copy64()
     when(cnt_y.ccnt===0.U){
         for(i <- 2 to 7)
-            io.output.up(i) := io.from_big(state).data(6+i-2)
-        io.output.up(1) := io.from_small(state)(1).data(1)
-        io.output.up(8) := io.from_small(state)(2).data(1)
+            output_reg.up(i) := io.from_big(state).data(6+i-2)
+        output_reg.up(1) := io.from_small(state)(1).data(1)
+        output_reg.up(8) := io.from_small(state)(2).data(1)
         when(cnt_x.ccnt===0.U){
-            io.output.up(0) := io.from_big(state).data(6)
+            output_reg.up(0) := io.from_big(state).data(6)
         }.otherwise{
-            io.output.up(0) := io.from_small(state)(0).data(1)
+            output_reg.up(0) := io.from_small(state)(0).data(1)
         }
         when(cnt_x.ccnt===cnt_x.cend){
-            io.output.up(9) := io.from_big(state).data(6+5)
+            output_reg.up(9) := io.from_big(state).data(6+5)
         }.otherwise{
-            io.output.up(9) := io.from_small(state)(3).data(1) 
+            output_reg.up(9) := io.from_small(state)(3).data(1) 
         }
     }.otherwise{
-        io.output.up := cache(~state)(0)
+        output_reg.up := cache(~state)(0)
     }
 
-    for(i <- 1 to 6){
-        when(if(i==6) cnt_ic.cend(i-1) else ~cnt_ic.cend(i)&&cnt_ic.cend(i-1)){
-            val t = (1<<i)-1
-            cache(~state)(t) := cache(~state)(0)
-            for(j <- 0 to t-1)
-                cache(~state)(j) := cache(~state)(j+1)
+    var x = 1
+    for(i <- 0 to 63){
+        if(i==(1<<x)-1){
+            val t = (1<<x)-1
+            when(if(x==6) cnt_ic.cend(x-1) else ~cnt_ic.cend(x)&&cnt_ic.cend(x-1)){
+                cache(~state)(t) := cache(~state)(0)
+            }.otherwise{
+                if(t<63)
+                    cache(~state)(t) := cache(~state)(t+1)
+            }
+            x += 1
+        }
+    }
+    x = 1
+    for(i <- 0 to 63){
+        if(i==(1<<x)-1){
+            x += 1
+        } else {
+            for(j <- 0 to 1){
+                cache(j)(i) := cache(j)(i+1)
+            }
         }
     }
     
     when(cnt_y.ccnt===cnt_y.cend){
         for(i <- 2 to 7)
-            io.output.down(i) := io.from_big(state).data(48-12+i-2)
-        io.output.down(1) := io.from_small(state)(1).data(6)
-        io.output.down(8) := io.from_small(state)(2).data(6)
+            output_reg.down(i) := io.from_big(state).data(48-12+i-2)
+        output_reg.down(1) := io.from_small(state)(1).data(6)
+        output_reg.down(8) := io.from_small(state)(2).data(6)
         when(cnt_x.ccnt===0.U){
-            io.output.down(0) := io.from_big(state).data(48-12)
+            output_reg.down(0) := io.from_big(state).data(48-12)
         }.otherwise{
-            io.output.down(0) := io.from_small(state)(0).data(6)
+            output_reg.down(0) := io.from_small(state)(0).data(6)
         }
         when(cnt_x.ccnt===cnt_x.cend){
-            io.output.down(9) := io.from_big(state).data(48-12+5)
+            output_reg.down(9) := io.from_big(state).data(48-12+5)
         }.otherwise{
-            io.output.down(9) := io.from_small(state)(3).data(6) 
+            output_reg.down(9) := io.from_small(state)(3).data(6) 
         }
     }.otherwise{
         for(i <- 2 to 7)
-            io.output.down(i) := io.from_big(~state).data(i-2)
-        io.output.down(1) := io.from_small(~state)(1).data(0)
-        io.output.down(8) := io.from_small(~state)(2).data(0)
+            output_reg.down(i) := io.from_big(~state).data(i-2)
+        output_reg.down(1) := io.from_small(~state)(1).data(0)
+        output_reg.down(8) := io.from_small(~state)(2).data(0)
         when(cnt_x.ccnt===0.U){
-            io.output.down(0) := io.from_big(~state).data(0)
+            output_reg.down(0) := io.from_big(~state).data(0)
         }.otherwise{
-            io.output.down(0) := io.from_small(~state)(0).data(0)
+            output_reg.down(0) := io.from_small(~state)(0).data(0)
         }
         when(cnt_x.ccnt===cnt_x.cend){
-            io.output.down(9) := io.from_big(~state).data(5)
+            output_reg.down(9) := io.from_big(~state).data(5)
         }.otherwise{
-            io.output.down(9) := io.from_small(~state)(3).data(0) 
+            output_reg.down(9) := io.from_small(~state)(3).data(0) 
         }
     }
 
     when(cnt_x.ccnt===0.U){
         for(i <- 0 to 7)
-            io.output.left(i) := io.from_big(state).data(i*6)
+            output_reg.left(i) := io.from_big(state).data(i*6)
     }.otherwise{
-        io.output.left := io.from_small(state)(0).data
+        output_reg.left := io.from_small(state)(0).data
     }
     when(cnt_x.ccnt===cnt_x.cend){
         for(i <- 0 to 7)
-            io.output.right(i) := io.from_big(state).data(i*6+5)
+            output_reg.right(i) := io.from_big(state).data(i*6+5)
     }.otherwise{
-        io.output.right := io.from_small(state)(3).data
+        output_reg.right := io.from_small(state)(3).data
     }
 
     
@@ -132,14 +147,20 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) exten
     }.otherwise{
         nxt_up(9) := io.from_small(state)(3).data(7) 
     }
-    for(i <- 1 to 6){
-        when(if(i==6) cnt_ic.cend(i-1) else ~cnt_ic.cend(i)&&cnt_ic.cend(i-1)){
-            val t = (1<<i)-1
-            cache(state)(t) := nxt_up
-            for(j <- 0 to t-1)
-                cache(state)(j) := cache(state)(j+1)
+    x = 1
+    for(i <- 0 to 63){
+        if(i==(1<<x)-1){
+            val t = (1<<x)-1
+            when(if(x==6) cnt_ic.cend(x-1) else ~cnt_ic.cend(x)&&cnt_ic.cend(x-1)){
+                cache(state)(t) := nxt_up
+            }.otherwise{
+                if(t<63)
+                    cache(state)(t) := cache(state)(t+1)
+            }
+            x += 1
         }
     }
+    io.valid_out := io.valid_in
     when(io.flag_job){
         cnt_x.set(io.job.cnt_x_end)
         cnt_y.set(io.job.cnt_y_end)
@@ -147,7 +168,6 @@ class PackReadData(val w: Int, val h_w: Int, val c_w: Int, val big_w: Int) exten
         cnt_swap.set(io.job.cnt_swap_end)
         state := 0.U
     }.elsewhen(io.valid_in){
-        io.valid_out := true.B
         cnt_ic.inc()
         when(cnt_swap.inc()){
             state := ~state

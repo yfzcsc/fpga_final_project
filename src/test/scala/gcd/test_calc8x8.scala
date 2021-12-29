@@ -34,7 +34,8 @@ class Calc8x8Tester(dut: Calc8x8) extends PeekPokeTester(dut) {
 
         val B = Array.fill[Int](4, 3, 3)(0)
         for(t <- 0 to 3)
-            for(i <- 0 to 8) B(t)(i/3)(i%3) = rnd.nextInt(5)-32768
+            for(i <- 0 to 8) B(t)(i/3)(i%3) = rnd.nextInt(32768)-16384
+            //rnd.nextInt(5)-32768
 
         val std = Array.tabulate(4, 8, 8) {
             (t, i, j) => {

@@ -8,10 +8,14 @@ import chisel3.experimental.BundleLiterals._
 class Top extends Module{
     //val io = IO(new)
     val io = IO(new Bundle{
+        val start = Input(Bool())
+        val input = Input(SInt(16.W))
         val complete = Output(Bool())
         val valid = Output(Bool())
+        val complete_output = Output(Bool())
         // val output = Output(UInt(1.W))
         val output = Output(SInt(16.W))
+        val checksum = Output(UInt(16.W))
     })
 
     val reader1 = Module(new GraphReader(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w, StdPara.big_w)).io
@@ -28,10 +32,10 @@ class Top extends Module{
     val writer = Module(new RealWriter(StdPara.w, StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w)).io
     val maxpool = Module(new Maxpool(StdPara.w)).io
 
-    // val rom_weight = if(StdPara.para_num==4) Module(new ROMWeight(StdPara.para_num)).io else Module(new ROMHalfWeight(StdPara.para_num)).io
-    // val rom_bias = if(StdPara.para_num==4) Module(new ROMBias(StdPara.para_num)).io else Module(new ROMHalfBias(StdPara.para_num)).io
-    val rom_weight = Module(new ROMWeight(StdPara.para_num)).io
-    val rom_bias = Module(new ROMBias(StdPara.para_num)).io
+    val rom_weight = if(StdPara.para_num==4) Module(new ROMWeight(StdPara.para_num)).io else Module(new ROMHalfWeight(StdPara.para_num)).io
+    val rom_bias = if(StdPara.para_num==4) Module(new ROMBias(StdPara.para_num)).io else Module(new ROMHalfBias(StdPara.para_num)).io
+    // val rom_weight = Module(new ROMWeight(StdPara.para_num)).io
+    // val rom_bias = Module(new ROMBias(StdPara.para_num)).io
     val bram = Module(new RAMGroup(StdPara.w, StdPara.addr_w, StdPara.id_w)).io
 
     io.complete := false.B
@@ -166,12 +170,16 @@ class Top extends Module{
 
     var num_stages = 0
 
+    io.complete_output := false.B
+
+    WAIT_START()
     CONV(4, 4, 4, 16, 30, 15)
     // WRITEHALF_CONV1(8, 8, 17, 8)
     // LAST_PRINT(4, 4, 32)
     
     // CONV(4, 4, 16, 32, 32, 16)
-    // RELU(4, 4, 32, 16+15, 17)
+    // RELU(4, 4, 16, 15+15, 17)
+    // LAST_PRINT(4, 4, 16)
     RELU0(4, 4, 16, 15+15, 17)
     // weight_addr = 0
     // bias_addr = 0
@@ -211,10 +219,21 @@ class Top extends Module{
     // conv_10
     CONV(8, 8, 16, 4, 29, 13)
     LAST_PRINT(8, 8, 4)
+
+    val checksum = RegInit(0.U(16.W))
+    CHECK_PRINT()
+    // LAST_CHECK(8, 8, 4)
     // LAST_PRINT(2, 2, 32)
 
 
-
+    def WAIT_START(){
+        when(state===(num_stages).U){
+            when(io.start){
+                state := (num_stages+1).U 
+            }    
+        }
+        num_stages += 1
+    }
     def CONVMULT(){
         WRITEHALF_CONV1(8, 8, 17, 8)
         println(num_stages)
@@ -449,8 +468,8 @@ class Top extends Module{
         )
         big_addr = nxt_big(big_addr+in_chan*w*h/2)
         small_addr = nxt_small(small_addr+in_chan*w*h/4)
-        weight_addr += in_chan*out_chan/4
-        bias_addr += out_chan/4
+        weight_addr += in_chan*out_chan/StdPara.para_num
+        bias_addr += out_chan/StdPara.para_num
 
         when(state===(num_stages).U){
             paras.set_conv_reader1(reader1)
@@ -509,8 +528,8 @@ class Top extends Module{
             quant_q_in=conv_q_in, 
             quant_q_out=conv_q_out   
         )
-        weight_addr += in_chan*out_chan/4
-        bias_addr += out_chan/4
+        weight_addr += in_chan*out_chan/StdPara.para_num
+        bias_addr += out_chan/StdPara.para_num
 
         when(state===(num_stages).U){
             paras.set_conv_reader1(reader1)
@@ -838,29 +857,41 @@ class Top extends Module{
             state := (num_stages+2).U
         }
         when(state===(num_stages+2).U){
+            state := (num_stages+3).U
+        }
+        when(state===(num_stages+3).U){
             when(lst_64_counter.inc()){
                 when(lst_counter.inc()){
-                    state := (num_stages+3).U
-                }.otherwise{
-                    reader1.valid_in := true.B
-                    reader2.valid_in := true.B    
+                    state := (num_stages+4).U
                 }
+            }.elsewhen(lst_64_counter.ccnt===62.U){
+                reader1.valid_in := true.B
+                reader2.valid_in := true.B  
             }
             when(read_pack.valid_out){
                 io.complete := true.B
                 io.valid := true.B
-                output_cache := read_pack.output.mat
-                // io.output := read_pack.output.mat(0)(16-1).asUInt^read_pack.output.mat(0)(1).asUInt
                 io.output := read_pack.output.mat(0)
+                for(i <- 0 to 62)
+                    output_cache(i) := read_pack.output.mat(i+1)
             }.otherwise{
                 io.valid := true.B
-                // io.output := output_cache(lst_64_counter.ccnt)(16-1).asUInt^output_cache(lst_64_counter.ccnt)(1).asUInt
-                io.output := output_cache(lst_64_counter.ccnt)
+                io.output := output_cache(0)
+                for(i <- 0 to 62)
+                    output_cache(i) := output_cache(i+1)
             }
         }
-        when(state===(num_stages+3).U){
-            state := (num_stages+3).U
+        when(state===(num_stages+4).U){
+            state := (num_stages+4).U
+            io.complete_output := true.B
         }
-        num_stages += 4
+        num_stages += 5
+    }
+
+    def CHECK_PRINT(): Unit = {
+        when(io.valid){
+            checksum := checksum^io.output.asUInt
+        }
+        io.checksum := checksum
     }
 }

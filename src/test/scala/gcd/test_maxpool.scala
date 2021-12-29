@@ -86,6 +86,8 @@ class Global2(_w: Int, h_w: Int, c_w: Int, id_w: Int, big_w: Int, addr_w: Int, b
     read_switch.valid_in := read_pack.valid_out
     read_switch.from := read_pack.output
     read_switch.from_weight(0) := io.weight_in
+    read_switch.in_h := 0.U
+    read_switch.in_chan := 0.U
 
     calc8x8.input := read_switch.to_calc8x8
     calc8x8.flag := 0.U.asTypeOf(calc8x8.flag)
@@ -332,6 +334,7 @@ class MaxpoolTester(dut: Global2, _w: Int, h_w: Int, c_w: Int, id_w: Int, addr_w
 
 
 class MaxpoolSpec extends FlatSpec with Matchers {
+    /*
     it should "Maxpool should pass" in {
         val w = 16
         val h_w = 16
@@ -344,5 +347,5 @@ class MaxpoolSpec extends FlatSpec with Matchers {
         chisel3.iotesters.Driver(() => new Global2(w, h_w, c_w, id_w, big_w, addr_w, bias_w, num)) { c =>
             new MaxpoolTester(c, w, h_w, c_w, id_w, addr_w, bias_w, num)
         } should be (true)
-    }
+    }*/
 }

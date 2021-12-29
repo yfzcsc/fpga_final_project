@@ -63,6 +63,20 @@ class FuckAdd extends Module{
     
 }
 */
+class Accumu2(w: Int, addr_w: Int, bias_w: Int, para_num: Int) extends Module{
+    val io = IO(new AccumuBundle(w, addr_w, bias_w, para_num))
+
+    io.result := 0.U.asTypeOf(Vec(para_num, new AccumuRawData(w)))
+    io.bias_addr := 0.U
+    io.valid_out := io.valid_in
+
+    val r64 = RegInit(0.U.asTypeOf(Vec(para_num, new AccumuRawData(w))))
+    for(t <- 0 to para_num-1)
+        for(i <- 0 to 63){
+            r64(t).mat(i) := io.in_from_calc8x8(t).mat(i)+io.bias_in(t)
+        }
+    io.result := r64
+}
 object FafaDriver extends App {
     (new ChiselStage).emitVerilog(
         new Top,
@@ -72,9 +86,18 @@ object FafaDriver extends App {
     )
 }
 
+object ShowDriver extends App {
+    (new ChiselStage).emitVerilog(
+        new Show,
+        //new ROMBias,
+        //new RAMGroup(StdPara.w, StdPara.addr_w, StdPara.id_w), 
+        Array("--target-dir", "C:\\Users\\yfz\\Desktop\\data\\Plan\\homework\\AI_fpga\\final_project\\project_1\\")
+    )
+}
+
 object FuckDriver extends App {
     (new ChiselStage).emitVerilog(
-        new Accumu(16, 10, 10, 4),
+        new Accumu2(16, 10, 36, 4),
         //new ROMBias,
         //new RAMGroup(StdPara.w, StdPara.addr_w, StdPara.id_w), 
         Array("--target-dir", "C:\\Users\\yfz\\Desktop\\data\\Plan\\homework\\AI_fpga\\final_project\\project_test\\")
