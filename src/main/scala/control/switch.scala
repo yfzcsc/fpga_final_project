@@ -28,6 +28,9 @@ class ReadSwitchBundle(val w: Int, val h_w: Int, val c_w: Int, val para_num: Int
     val to_copy = Output(new QuantedData(w))
     val to_weight = Output(Vec(para_num, new CalcWeightData()))
     val to_multmap = Output(Vec(4, new CalcWeightData()))
+
+    val valid_in_from_user = Input(Bool())
+    val data_from_user = Input(new QuantedData(w))
 }
 
 class ReadSwitch(val w: Int, val h_w: Int, val c_w: Int, val para_num: Int) extends Module{
@@ -56,44 +59,49 @@ class ReadSwitch(val w: Int, val h_w: Int, val c_w: Int, val para_num: Int) exte
             for(i <- 0 to 3)
                 for(j <- 0 to 3)
                     io.to_multmap(ii*2+jj).real(i*4+j) := cache((i+ii*4)*8+(j+jj*4))
-                
+    
+    for(t <- 0 to para_num-1)
+        for(i <- 0 to 8)
+            io.to_weight(t).real(i) := io.from_weight(t)(i)       
     when(io.flag_job){
         job_type := io.job
         ups_state := false.B
         cnt_h.set(io.in_h)
         cnt_ic.set(io.in_chan)
         state := false.B
-    }.elsewhen(io.valid_in){
+    }.otherwise{
         switch(job_type){
             is(ReadSwitchType.toConv){
-                for(t <- 0 to para_num-1)
-                    for(i <- 0 to 8)
-                        io.to_weight(t).real(i) := io.from_weight(t)(i)
-                io.valid_out_calc8x8 := true.B
+                io.valid_out_calc8x8 := io.valid_in
             }
             is(ReadSwitchType.toCopy){
-                io.valid_out_copy := true.B
+                io.valid_out_copy := io.valid_in
                 io.to_copy.mat := io.from.mat
             }
             is(ReadSwitchType.toMult2){
-                when(state){                
-                    io.valid_out_calc8x8 := true.B
+                when(io.valid_in){
+                    when(state){                
+                        io.valid_out_calc8x8 := true.B
+                    }
+                    state := ~state    
                 }
-                state := ~state
             }
             is(ReadSwitchType.toMaxp){
-                io.valid_out_maxp := true.B
+                io.valid_out_maxp := io.valid_in
             }
             is(ReadSwitchType.idle){
-
+                io.valid_out_copy := io.valid_in_from_user
+                io.to_copy := io.data_from_user
             }
             is(ReadSwitchType.toUps){
-                io.valid_out_copy := true.B
-                when(cnt_ic.inc()){
-                    state := ~state
-                    when(cnt_h.inc()){
-                        ups_state := ~ups_state
-                    }
+                when(io.valid_in){
+                    io.valid_out_copy := true.B
+                    when(cnt_ic.inc()){
+                        state := ~state
+                        when(cnt_h.inc()){
+                            ups_state := ~ups_state
+                        }
+                    }    
                 }
                 
                 when(ups_state){

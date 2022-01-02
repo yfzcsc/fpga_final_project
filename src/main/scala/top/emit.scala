@@ -103,3 +103,10 @@ object FuckDriver extends App {
         Array("--target-dir", "C:\\Users\\yfz\\Desktop\\data\\Plan\\homework\\AI_fpga\\final_project\\project_test\\")
     )
 }
+
+object XDriver extends App {
+    (new ChiselStage).emitVerilog(
+        new Wrapper,
+        Array("--target-dir", "C:\\Users\\yfz\\Desktop\\data\\Plan\\homework\\AI_fpga\\final_project\\project_1\\")
+    )
+}

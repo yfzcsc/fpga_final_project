@@ -1,3 +1,7 @@
+// Copy from top.scala
+
+// And change the interface
+
 package final_project
 
 import chisel3._
@@ -5,17 +9,15 @@ import chisel3.util._
 
 import chisel3.experimental.BundleLiterals._
 
-class Top extends Module{
-    //val io = IO(new)
+class FinalTop extends Module{
     val io = IO(new Bundle{
         val start = Input(Bool())
         val input = Input(SInt(16.W))
+        val valid_in = Input(Bool())
         val complete = Output(Bool())
-        val valid = Output(Bool())
         val complete_output = Output(Bool())
-        // val output = Output(UInt(1.W))
+        val valid = Output(Bool())
         val output = Output(SInt(16.W))
-        val checksum = Output(UInt(16.W))
     })
 
     val reader1 = Module(new GraphReader(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w, StdPara.big_w)).io
@@ -156,8 +158,8 @@ class Top extends Module{
         return (x-L)%(R-L+1)+L
     }
 
-    var big_addr = 0
-    var small_addr = 0
+    var big_addr = StdPara.big_min_addr
+    var small_addr = StdPara.small_min_addr
     var weight_addr = 0
     var bias_addr = 0
     
@@ -165,10 +167,8 @@ class Top extends Module{
     
     
     val counter = RegInit(0.U.asTypeOf(ACounter(16.W)))
-    val state = RegInit(0.U(8.W))
+    val state = RegInit(0.U(6.W))
 
-
-    val output_cache = RegInit(VecInit(Seq.fill(64)(0.S(16.W))))
 
     var num_stages = 0
 
@@ -176,11 +176,15 @@ class Top extends Module{
 
     WAIT_START()
     CONV(4, 4, 4, 16, 30, 15)
+    // LAST_PRINT(8, 8, 4)
+    // NEXT_LOOP()
+    // LAST_PRINT(8, 8, 4)
+    // END()
     // WRITEHALF_CONV1(8, 8, 17, 8)
     // LAST_PRINT(4, 4, 32)
     
-    // CONV(4, 4, 16, 32, 32, 16)
     // RELU(4, 4, 16, 15+15, 17)
+    // CONV(4, 4, 16, 32, 32, 16)
     // LAST_PRINT(4, 4, 16)
     RELU0(4, 4, 16, 15+15, 17)
     // weight_addr = 0
@@ -221,9 +225,10 @@ class Top extends Module{
     // conv_10
     CONV(8, 8, 16, 4, 29, 13)
     LAST_PRINT(8, 8, 4)
+    NEXT_LOOP()
 
-    val checksum = RegInit(0.U(16.W))
-    CHECK_PRINT()
+    // val checksum = RegInit(0.U(16.W))
+    // CHECK_PRINT()
     // LAST_CHECK(8, 8, 4)
     // LAST_PRINT(2, 2, 32)
 
@@ -829,18 +834,30 @@ class Top extends Module{
     }
 
     def LAST_PRINT(w: Int, h: Int, in_chan: Int): Unit = {
+        val output_cache = RegInit(VecInit(Seq.fill(64)(0.S(16.W))))
+        val write_cache = RegInit(VecInit(Seq.fill(64)(0.S(16.W))))
         val lst_counter = RegInit(0.U.asTypeOf(ACounter(16.W)))
         val lst_64_counter = RegInit(0.U.asTypeOf(ACounter(16.W)))
+        println(big_addr)
+        println(small_addr)
         val paras_print = GenAllPara(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w, big_w=StdPara.big_w, 
-            w, h, w, h, 
-            in_chan, 1,
+            8, 8, 4, 4, 
+            4, 1,
             1, 0,
             big_addr, StdPara.big_max_addr, StdPara.big_min_addr,
-            // StdPara.big_conv1_addr, 899, 0,
             0, 0, 0,
             small_addr, StdPara.small_max_addr, StdPara.small_min_addr,
-            // StdPara.small_conv1_addr, 449, 0,
             0, 0, 0,
+            0, 0, 0, 0
+        )
+        val paras_new_input = GenAllPara(StdPara.addr_w, StdPara.h_w, StdPara.c_w, StdPara.id_w, big_w=StdPara.big_w, 
+            8, 8, 4, 4, 
+            4, 4,
+            1, 0,
+            0, 0, 0,
+            StdPara.big_min_addr, StdPara.big_max_addr, StdPara.big_min_addr,
+            0, 0, 0,
+            StdPara.small_min_addr, StdPara.small_max_addr, StdPara.small_min_addr,
             0, 0, 0, 0
         )
         when(state===(num_stages).U){
@@ -850,6 +867,7 @@ class Top extends Module{
             paras_print.set_conv_read_pack(read_pack)
             read_switch.flag_job := true.B
             read_switch.job := ReadSwitchType.idle
+            paras_new_input.set_write(writer)
             lst_64_counter.set(63.U)
             lst_counter.set((w*h*in_chan-1).U)
         }
@@ -860,18 +878,25 @@ class Top extends Module{
         }
         when(state===(num_stages+2).U){
             state := (num_stages+3).U
+            io.complete := true.B
         }
+        for(i <- 0 to 62)
+            write_cache(i) := write_cache(i+1)
+        val rs_reg = RegInit(false.B)
         when(state===(num_stages+3).U){
+            read_switch.data_from_user.mat := write_cache
+            rs_reg := false.B
             when(lst_64_counter.inc()){
                 when(lst_counter.inc()){
                     state := (num_stages+4).U
                 }
+                rs_reg := true.B
             }.elsewhen(lst_64_counter.ccnt===62.U){
                 reader1.valid_in := true.B
                 reader2.valid_in := true.B  
             }
+            read_switch.valid_in_from_user := rs_reg
             when(read_pack.valid_out){
-                io.complete := true.B
                 io.valid := true.B
                 io.output := read_pack.output.mat(0)
                 for(i <- 0 to 62)
@@ -882,18 +907,33 @@ class Top extends Module{
                 for(i <- 0 to 62)
                     output_cache(i) := output_cache(i+1)
             }
+            write_cache(63) := io.input
         }
         when(state===(num_stages+4).U){
-            state := (num_stages+4).U
+            rs_reg := false.B
+            state := (num_stages+5).U
             io.complete_output := true.B
         }
         num_stages += 5
     }
 
-    def CHECK_PRINT(): Unit = {
+    /*def CHECK_PRINT(): Unit = {
         when(io.valid){
             checksum := checksum^io.output.asUInt
         }
         io.checksum := checksum
+    }*/
+
+    def NEXT_LOOP(): Unit = {
+        println("next_loop: ", num_stages)
+        when(state===(num_stages).U){
+            state := 0.U
+        }
+        num_stages += 1
     }
+    def END(): Unit = {
+        num_stages += 1
+    }
+
+    println("all state: ", num_stages)
 }
