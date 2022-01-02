@@ -8,15 +8,12 @@ It supports to calculate leakyReLU, 2D convolution by F(6x6, 3x3) winograd trans
 
 It can run at 125MHz or more on Xilinx Zynq7000 xc7z035 ffg676.
 
-#### Requirements
-
-----
+## Requirements
 
 * sbt
 
-#### Usage
+## Usage
 
-----
 
 To generate verilog: `sbt "runMain  final_project.XDriver"`
 
@@ -24,8 +21,7 @@ To test some modules: `sbt "test"`
 
 where `X` is a class in `top/emit.scala`. The target directory can be modified.
 
-#### Documentation
+## Documentation
 
----------
 
 TODO
